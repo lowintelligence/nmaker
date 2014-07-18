@@ -11,7 +11,7 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
 {
     int n, total, start, end, myid, nParticle ;
     int nDomain = dp->NumDom;
-    double sample_ratio = 0.1;//1.0;
+    int sample_gap = 16;//1.0;
     Sample *sample;
     Sample *sendBuffer;
     int *nSample;
@@ -24,7 +24,7 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
 
     total = 0;
     for (n=0; n<nDomain; n++) {
-        nSample[n] = dp->DomList[n].NumPart*sample_ratio;
+        nSample[n] = dp->DomList[n].NumPart/sample_gap;
         total  += nSample[n];
     }
     *total_sample = total;
@@ -38,12 +38,13 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
 
     n=0;
     nParticle = nSample[myid];
+
     while( n < nParticle ) {
         sendBuffer[n].pos[0] = dp->Part[n].pos[0];
         sendBuffer[n].pos[1] = dp->Part[n].pos[1];
         sendBuffer[n].pos[2] = dp->Part[n].pos[2];
         sendBuffer[n].w = 1.0f;
-        n++;
+        n+=sample_gap;
     }//Cao! n+=nblock and sample_ratio=0.1
     MPI_Datatype mpi_sample_type;
     MPI_Type_contiguous(sizeof(Sample), MPI_CHAR, &mpi_sample_type );

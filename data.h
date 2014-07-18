@@ -53,11 +53,28 @@ typedef struct {
     vect3d masscenter; // mass center
 } Node;
 
+/* Cao! New structure for morton key tree.
+ * We now have continous memory local trees!
+typedef struct {
+	int nPart;
+	int firstpart; // index of particle
+	int firstchild; // memory offset accoring to the root
+	int childnum;
+	int level;
+	int mortonkey;
+	real width;
+	real mass;
+	vect3d masscenter;
+}
+*/
+
 typedef struct {
     int NumTree;
     int *root_tree; // as long as subcuboid, record the root index
     int *root_cell;
     Node *tree;
+	int *partidxes; // Cao! to indicate the particle position.
+	int *numparticles; // Cao! to store the particle numbers in meshes.
 } DomainTree;
 
 

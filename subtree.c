@@ -282,3 +282,169 @@ void packing_group(DomainTree *dtp) {
 
 }
 
+
+// Cao! Multithreaded build morton based subtree kernel.
+void mt_build_subtree_morton(void *param) {
+    int m, n;
+    int rank;
+    int first, last, length;
+    int *root;
+	double size;
+
+	TaskBuildSubTree *taskp = (TaskBuildSubTree*)param;
+
+// Now first and last should be the mesh index.
+// Here we should pass from the caller.
+	rank  = taskp->rank;
+	first = taskp->first;
+	last = taskp->last;
+	root = taskp->root_cell;
+	parts = taskp->partidxes; // This should be added in data.h to indicate the particle position.
+	numpart = taskp->numparticles; // Number of particles in meshes, should be added in data.h.
+	size = taskp->box/(1<<(taskp->level));
+	
+	for (m=first; m<last; m++)
+	{
+		int ipart = parts[m];
+		int mpart = numpart[m];
+
+		float sumcenterx, sumcentery, sumcenterz, invnpart;
+
+		// Calculate the root node.
+		sumcenterx = sumcentery = sumcenterz = 0;
+
+		Node* pnode = &tree[root[m]];
+
+		pnode->level = 0;
+		pnode->firstpart = ipart;
+		pnode->childnum = 0;
+		pnode->firstchild = -1;
+		pnode->mortonkey = 0;
+		pnode->width = size;
+		pnode->mass = 0;
+
+		if(mpart == 0) continue;
+
+		for (n=0; n<mpart; n++)
+		{
+			pnode->nPart++;
+			pnode->mass += part[ipart+n].mass;
+			sumcenterx += part[ipart+n].pos[0];
+			sumcentery += part[ipart+n].pos[1];
+			sumcenterz += part[ipart+n].pos[2];
+		}
+		invnpart = 1.0f / (float)pnode->nPart;
+		pnode->masscenter[0] = sumcenterx * invnpart;
+		pnode->masscenter[1] = sumcentery * invnpart;
+		pnode->masscenter[2] = sumcenterz * invnpart;
+		pnode++;
+
+		int level = 1;
+		int endmask = 0;
+		Node* prnode = &tree[root[m]];
+
+        printf(" [%d] building the mesh(%d), particles in mesh = %d.\n", rank, mpart);
+
+		while (!endmask || level>MAX_MORTON_LEVEL/* Define the number please */)
+		{
+			endmask = 1;
+			levelshift = (MAX_MORTON_LEVEL-level)*3;
+			
+			n = 0;
+			// Find and put the first particle into the tree.
+			if(level > MIN_TREE_LEVEL/* Define */)
+			{
+				// If the package is small enough, 
+				// We move to the next up-level node.
+				while(n<mprt && prnode->nPart <= MIN_PACKAGE_SIZE/* Define  */)
+				{
+					n += prnode->nPart;
+					prnode++;
+				}
+			}
+			if (n<mprt)
+			{
+				assert (ipart+n == prnode->firstpart);
+				// We have a certain new node of this level.
+				// So we cannot stop scanning at this level.
+				endmask = 0;
+				curcode = part[ipart+n].mortonkey >> levelshift;
+
+				prnode->childnum++;
+				prnode->firstchild = pnode - root[m];
+				pnode->level = level;
+				pnode->mortonkey = part[ipart+n].mortonkey & ((~0) << levelshift);
+				pnode->nPart = 1;
+				pnode->firstpart = ipart+n;
+				pnode->firstchild = -1;
+				pnode->childnum = 0;
+				pnode->width = prnode->width * 0.5f; 
+				pnode->mass = 0;
+
+				// Scan all the node to build this level tree stucture.
+				while (1)
+				{
+					sumcenterx = sumcentery = sumcenterz = 0;
+					while (n<mpart && ((part[ipart+n].mortonkey >> levershift) == curcode))
+					{
+						pnode->nPart++;
+						pnode->mass += part[ipart+n].mass;
+						sumcenterx += part[ipart+n].pos[0];
+						sumcentery += part[ipart+n].pos[1];
+						sumcenterz += part[ipart+n].pos[2];
+						n++;
+					}
+					invnpart = 1.0f / (float)pnode->nPart;
+					pnode->masscenter[0] = sumcenterx * invnpart;
+					pnode->masscenter[1] = sumcentery * invnpart;
+					pnode->masscenter[2] = sumcenterz * invnpart;
+					pnode++;
+
+					if ( n>=mpart ) 
+					{
+						// Here n>=mpart means we have scanned the last particle of this lever.
+						// So we should jump to a deeper level scan.
+						// prnode++ also changes the up-level.
+						prnode++;
+						break;
+					}
+
+					curcode = part[ipart+n].mortonkey >> levelshift;
+
+					if ( (curcode^(prnode->mortonkey>>levelshift)) >> 3 )
+					{
+						// We finished all children of one node,
+						// then shift to the next up-level node.
+						prnode++;
+						if(level > MIN_TREE_LEVEL)
+						{
+							// If the package is small enough, 
+							// We move to the next up-level node.
+							while(n<mpart && prnode->pNode <= MIN_PACKAGE_SIZE)
+							{
+								n += prnode->nPart;
+								prnode++;
+							}
+						}
+						// If n>=mpart, we need to jump to a deeper level scan.
+						// Otherwise, continue in this level.
+						if (n>=mpart) break;
+						curcode = part[ipart+n].mortonkey >> levelshift;
+					}	
+						
+					prnode->firstchild = pnode - root[m];
+					prnode->childnum++;
+					pnode->level = level;
+					pnode->mortonkey = curcode << levelshift;
+					pnode->nPart = 1;
+					pnode->firstpart = ipart+n;
+					pnode->firstchild = -1;
+					pnode->childnum = 0;
+					pnode->width = prnode->width * 0.5f;
+					pnode->mass = 0;
+				}
+			}
+			level++;
+		}
+	}
+}
