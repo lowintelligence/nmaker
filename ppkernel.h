@@ -45,3 +45,5 @@ typedef struct {
 	array3 pos;
 	array3 acc;
 } PPPack;
+
+int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2);

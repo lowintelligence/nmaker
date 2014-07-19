@@ -19,7 +19,7 @@ double dtime()
 
 int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 {
-    int n, nb, mb;
+    int n;
     double tstart, tstop, ttime;
 
     /*
@@ -52,7 +52,7 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 
 #pragma omp parallel
 	{
-		int j, k, m, n, nt, mt, tid, tnum;
+		int j, k, m, nb, mb, nt, mt, tid, tnum;
 
 		PRECTYPE px2, py2, pz2, ax2, ay2, az2;
 		PRECTYPE dx1, dy1, dz1, dr21, dr31;
@@ -63,10 +63,10 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 		tid = omp_get_thread_num();
 		tnum = omp_get_num_threads();
 	
-		nb = la/L2CNT;
-		mb = lb/L1CNT;
+		nb = (la+L2CNT-1)/L2CNT;
+		mb = (lb+L1CNT-1)/L1CNT;
 
-		if( nb >= (tnum<<2) )
+		if( nb >= (tnum<<1) )
 		{
 #pragma omp for schedule(static)
 			for ( n=0; n<nb; n++ ) {
@@ -229,11 +229,9 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 #pragma omp for schedule(static)
 			for ( n=0; n<la; n++ ) {
 
-				nt = (n==nb-1) ? la : (n+1)*L2CNT;
-
-				px2=A->pos.x[j];
-				py2=A->pos.y[j];
-				pz2=A->pos.z[j];
+				px2=A->pos.x[n];
+				py2=A->pos.y[n];
+				pz2=A->pos.z[n];
 
 				ax2=0;
 				ay2=0;
@@ -354,9 +352,9 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 					}
 				}
 
-				A->acc.x[j] += ax2;
-				A->acc.y[j] += ay2;
-				A->acc.z[j] += az2;
+				A->acc.x[n] += ax2;
+				A->acc.y[n] += ay2;
+				A->acc.z[n] += az2;
 			}
 		}
 	}
