@@ -17,7 +17,7 @@ double dtime()
 	return (tseconds);
 }
 
-int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
+int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 {
     int n;
     double tstart, tstop, ttime;
@@ -29,16 +29,16 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
     
     for ( n=0; n<la; n++ ) {
         for ( m=0; m<lb; m++) {
-            dx1 = B->pos.x[m] -  A->pos.x[n];
-            dy1 = B->pos.y[m] -  A->pos.y[n];
-            dz1 = B->pos.z[m] -  A->pos.z[n];
+            dx1 = B.pos.x[m] -  A.pos.x[n];
+            dy1 = B.pos.y[m] -  A.pos.y[n];
+            dz1 = B.pos.z[m] -  A.pos.z[n];
             
             dr21 = eps2 + dx*dx + dy*dy + dz*dz;
             dr31 = SQRT(dr2)*dr2;
             
-            A->acc.x[n] += dx1/dr31;
-            A->acc.y[n] += dy1/dr31;
-            A->acc.z[n] += dz1/dr31;
+            A.acc.x[n] += dx1/dr31;
+            A.acc.y[n] += dy1/dr31;
+            A.acc.z[n] += dz1/dr31;
         }
     }
 
@@ -47,8 +47,8 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
     ttime = tstop - tstart;
     printf("dtime = %lf \n", ttime);
     */
-    
-    tstart = dtime();
+
+//    tstart = dtime();
 
 #pragma omp parallel
 	{
@@ -63,33 +63,34 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 		tid = omp_get_thread_num();
 		tnum = omp_get_num_threads();
 	
-		nb = (la+L2CNT-1)/L2CNT;
-		mb = (lb+L1CNT-1)/L1CNT;
+		nb = (la+CLCNT-1)/CLCNT;
+		mb = (lb+N_CACHE-1)/N_CACHE;
 
-		if( nb >= (tnum<<1) )
+		if( (nb >= (tnum<<1)) && (lb > CLCNT) ) // The num of A and B are all large enough
 		{
 #pragma omp for schedule(static)
 			for ( n=0; n<nb; n++ ) {
 
-				nt = (n==nb-1) ? la : (n+1)*L2CNT;
+				nt = (n==nb-1) ? la : (n+1)*CLCNT;
 
 				for (m=0; m<mb; m++) {
 #ifdef _OPENMP
-					mt = ((m+tid)%mb)*L1CNT + (((m+tid)%mb==mb-1 && lb%L1CNT) ? lb-(mb-1)*L1CNT : L1CNT/UNROLL);
+					mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #else
-					mt = m*L1CNT + ((m==mb-1) ? (lb-m*L1CNT)/UNROLL : L1CNT/UNROLL);
+					mt = m*N_CACHE + ((m==mb-1) ? (lb-m*N_CACHE)/UNROLL : N_CACHE/UNROLL);
 #endif
 
 					if ( mt == lb ) // No unrolling at the last B block
 					{
-//#pragma prefetch A->pos.x:1:L2CNT
-//#pragma prefetch A->pos.y:1:L2CNT
-//#pragma prefetch A->pos.z:1:L2CNT
-						for (j=n*L2CNT; j<nt; j++)
+//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, ((m+tid)%mb)*N_CACHE, mt);
+//#pragma prefetch A.pos.x:1:CLCNT
+//#pragma prefetch A.pos.y:1:CLCNT
+//#pragma prefetch A.pos.z:1:CLCNT
+						for (j=n*CLCNT; j<nt; j++)
 						{
-							px2=A->pos.x[j];
-							py2=A->pos.y[j];
-							pz2=A->pos.z[j];
+							px2=A.pos.x[j];
+							py2=A.pos.y[j];
+							pz2=A.pos.z[j];
 
 							ax2=0;
 							ay2=0;
@@ -98,14 +99,14 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 #pragma ivdep
 #pragma vector aligned
 #ifdef _OPENMP
-							for (k=((m+tid)%mb)*L1CNT; k<mt; k++)
+							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
-							for (k=m*L1CNT; k<mt; k++)
+							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B->pos.x[k] - px2;
-								dy1 = B->pos.y[k] - py2;
-								dz1 = B->pos.z[k] - pz2;
+								dx1 = B.pos.x[k] - px2;
+								dy1 = B.pos.y[k] - py2;
+								dz1 = B.pos.z[k] - pz2;
 
 								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #ifdef __single_prec
@@ -119,21 +120,21 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 								az2 += dz1*dr31 ;
 							}
 
-							A->acc.x[j] += ax2;
-							A->acc.y[j] += ay2;
-							A->acc.z[j] += az2;
+							A.acc.x[j] += ax2;
+							A.acc.y[j] += ay2;
+							A.acc.z[j] += az2;
 						}
 					}
 					else // Unrolling the loop
 					{
-//#pragma prefetch A->pos.x:1:L2CNT
-//#pragma prefetch A->pos.y:1:L2CNT
-//#pragma prefetch A->pos.z:1:L2CNT
-						for (j=n*L2CNT; j<nt; j++)
+//#pragma prefetch A.pos.x:1:CLCNT
+//#pragma prefetch A.pos.y:1:CLCNT
+//#pragma prefetch A.pos.z:1:CLCNT
+						for (j=n*CLCNT; j<nt; j++)
 						{
-							px2=A->pos.x[j];
-							py2=A->pos.y[j];
-							pz2=A->pos.z[j];
+							px2=A.pos.x[j];
+							py2=A.pos.y[j];
+							pz2=A.pos.z[j];
 
 							ax2=0;
 							ay2=0;
@@ -142,26 +143,26 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 #pragma ivdep
 #pragma vector aligned
 #ifdef _OPENMP
-							for (k=((m+tid)%mb)*L1CNT; k<mt; k++)
+							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
-							for (k=m*L1CNT; k<mt; k++)
+							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B->pos.x[k] - px2;
-								dy1 = B->pos.y[k] - py2;
-								dz1 = B->pos.z[k] - pz2;
+								dx1 = B.pos.x[k] - px2;
+								dy1 = B.pos.y[k] - py2;
+								dz1 = B.pos.z[k] - pz2;
 #if (UNROLL > 1)
-								dx2 = B->pos.x[k+L1CNT/UNROLL] - px2;
-								dy2 = B->pos.y[k+L1CNT/UNROLL] - py2;
-								dz2 = B->pos.z[k+L1CNT/UNROLL] - pz2;
+								dx2 = B.pos.x[k+N_CACHE/UNROLL] - px2;
+								dy2 = B.pos.y[k+N_CACHE/UNROLL] - py2;
+								dz2 = B.pos.z[k+N_CACHE/UNROLL] - pz2;
 #if (UNROLL >= 4)
-								dx3 = B->pos.x[k+2*L1CNT/UNROLL] - px2;
-								dy3 = B->pos.y[k+2*L1CNT/UNROLL] - py2;
-								dz3 = B->pos.z[k+2*L1CNT/UNROLL] - pz2;
+								dx3 = B.pos.x[k+2*N_CACHE/UNROLL] - px2;
+								dy3 = B.pos.y[k+2*N_CACHE/UNROLL] - py2;
+								dz3 = B.pos.z[k+2*N_CACHE/UNROLL] - pz2;
 
-								dx4 = B->pos.x[k+3*L1CNT/UNROLL] - px2;
-								dy4 = B->pos.y[k+3*L1CNT/UNROLL] - py2;
-								dz4 = B->pos.z[k+3*L1CNT/UNROLL] - pz2;
+								dx4 = B.pos.x[k+3*N_CACHE/UNROLL] - px2;
+								dy4 = B.pos.y[k+3*N_CACHE/UNROLL] - py2;
+								dz4 = B.pos.z[k+3*N_CACHE/UNROLL] - pz2;
 #endif				
 #endif
 
@@ -216,48 +217,50 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 #endif
 							}
 
-							A->acc.x[j] += ax2;
-							A->acc.y[j] += ay2;
-							A->acc.z[j] += az2;
+							A.acc.x[j] += ax2;
+							A.acc.y[j] += ay2;
+							A.acc.z[j] += az2;
 						}
 					}
 				}
 			}
 		}
-		else
+		else if ( lb > CLCNT )
 		{
-#pragma omp for schedule(static)
-			for ( n=0; n<la; n++ ) {
+			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
+			int nt = ns + (la+tid)/tnum;
 
-				px2=A->pos.x[n];
-				py2=A->pos.y[n];
-				pz2=A->pos.z[n];
-
-				ax2=0;
-				ay2=0;
-				az2=0;
-
-				for (m=0; m<mb; m++)
-				{
+			for (m=0; m<mb; m++)
+			{
 #ifdef _OPENMP
-					mt = ((m+tid)%mb)*L1CNT + (((m+tid)%mb==mb-1 && lb%L1CNT) ? lb-(mb-1)*L1CNT : L1CNT/UNROLL);
+				mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #else
-					mt = m*L1CNT + ((m==mb-1) ? (lb-m*L1CNT)/UNROLL : L1CNT/UNROLL);
+				mt = m*N_CACHE + ((m==mb-1) ? (lb-m*N_CACHE)/UNROLL : N_CACHE/UNROLL);
 #endif
+
+				for (j=ns; j<nt; j++)
+				{
+					px2=A.pos.x[j];
+					py2=A.pos.y[j];
+					pz2=A.pos.z[j];
+
+					ax2=0;
+					ay2=0;
+					az2=0;
 
 					if ( mt == lb ) // No unrolling at the last B block
 					{
 #pragma ivdep
 #pragma vector aligned
 #ifdef _OPENMP
-						for (k=((m+tid)%mb)*L1CNT; k<mt; k++)
+						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
-						for (k=m*L1CNT; k<mt; k++)
+						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B->pos.x[k] - px2;
-							dy1 = B->pos.y[k] - py2;
-							dz1 = B->pos.z[k] - pz2;
+							dx1 = B.pos.x[k] - px2;
+							dy1 = B.pos.y[k] - py2;
+							dz1 = B.pos.z[k] - pz2;
 
 							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #ifdef __single_prec
@@ -276,26 +279,26 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 #pragma ivdep
 #pragma vector aligned
 #ifdef _OPENMP
-						for (k=((m+tid)%mb)*L1CNT; k<mt; k++)
+						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
-						for (k=m*L1CNT; k<mt; k++)
+						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B->pos.x[k] - px2;
-							dy1 = B->pos.y[k] - py2;
-							dz1 = B->pos.z[k] - pz2;
+							dx1 = B.pos.x[k] - px2;
+							dy1 = B.pos.y[k] - py2;
+							dz1 = B.pos.z[k] - pz2;
 #if (UNROLL > 1)
-							dx2 = B->pos.x[k+L1CNT/UNROLL] - px2;
-							dy2 = B->pos.y[k+L1CNT/UNROLL] - py2;
-							dz2 = B->pos.z[k+L1CNT/UNROLL] - pz2;
+							dx2 = B.pos.x[k+N_CACHE/UNROLL] - px2;
+							dy2 = B.pos.y[k+N_CACHE/UNROLL] - py2;
+							dz2 = B.pos.z[k+N_CACHE/UNROLL] - pz2;
 #if (UNROLL >= 4)
-							dx3 = B->pos.x[k+2*L1CNT/UNROLL] - px2;
-							dy3 = B->pos.y[k+2*L1CNT/UNROLL] - py2;
-							dz3 = B->pos.z[k+2*L1CNT/UNROLL] - pz2;
+							dx3 = B.pos.x[k+2*N_CACHE/UNROLL] - px2;
+							dy3 = B.pos.y[k+2*N_CACHE/UNROLL] - py2;
+							dz3 = B.pos.z[k+2*N_CACHE/UNROLL] - pz2;
 
-							dx4 = B->pos.x[k+3*L1CNT/UNROLL] - px2;
-							dy4 = B->pos.y[k+3*L1CNT/UNROLL] - py2;
-							dz4 = B->pos.z[k+3*L1CNT/UNROLL] - pz2;
+							dx4 = B.pos.x[k+3*N_CACHE/UNROLL] - px2;
+							dy4 = B.pos.y[k+3*N_CACHE/UNROLL] - py2;
+							dz4 = B.pos.z[k+3*N_CACHE/UNROLL] - pz2;
 #endif				
 #endif
 
@@ -350,18 +353,48 @@ int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2)
 #endif
 						}
 					}
-				}
 
-				A->acc.x[n] += ax2;
-				A->acc.y[n] += ay2;
-				A->acc.z[n] += az2;
+					A.acc.x[j] += ax2;
+					A.acc.y[j] += ay2;
+					A.acc.z[j] += az2;
+				}
+			}
+		}
+		else
+		{
+			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
+			int nt = ns + (la+tid)/tnum;
+//			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
+			for (m=0; m<lb; m++)
+			{
+				px2 = B.pos.x[m];
+				py2 = B.pos.y[m];
+				pz2 = B.pos.z[m];
+#pragma ivdep
+				for (k=ns; k<nt; k++)
+				{
+					dx1 = px2 - A.pos.x[k];
+					dy1 = py2 - A.pos.y[k];
+					dz1 = pz2 - A.pos.z[k];
+
+					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
+#ifdef __single_prec
+					dr31 = ((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+					dr31 = INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+					A.acc.x[k] += dx1*dr31 ;
+					A.acc.y[k] += dy1*dr31 ;
+					A.acc.z[k] += dz1*dr31 ;
+				}
 			}
 		}
 	}
 
-    tstop = dtime();
-    ttime = tstop - tstart;
-    //printf("dtime = %lf \n", ttime);
+//    tstop = dtime();
+//    ttime = tstop - tstart;
+//    printf("dtime = %lf \n", ttime);
 
     return 0;
 }

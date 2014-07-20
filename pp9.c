@@ -46,7 +46,7 @@ void initialize_particle(int nPart, double box)
 
 int main(int argc, char *argv[])
 {
-    int d, nPart;
+    int n, nPart, lb, la;
     double tstart, tstop, ttime;
     double gflops = 0.0;
     float a = 1.1;
@@ -61,6 +61,15 @@ int main(int argc, char *argv[])
 	if (argc>1)
 	{
 		nPart=atoi(argv[1]);
+	}
+	lb = la = nPart;
+	if (argc>2)
+	{
+		lb=atoi(argv[2]);
+	}
+	if (argc>3)
+	{
+		la=atoi(argv[3]);
 	}
     /*
     printf("Initializing\r\n");
@@ -100,6 +109,12 @@ int main(int argc, char *argv[])
  //   omp_set_num_threads(32);
   //  kmp_set_defaults("KMP_AFFINITY=compact");
 //    kmp_set_defaults("KMP_AFFINITY=scatter");
+#pragma omp parallel for schedule(static)
+    for (n=0; n<nPart; n++) {
+         part.acc.x[n] = 0;
+         part.acc.y[n] = 0;
+         part.acc.z[n] = 0;
+    }
     
     tstart = dtime();
 
@@ -114,7 +129,7 @@ int main(int argc, char *argv[])
 	PAPI_start(EventSet);
 #endif
 
-	ppkernel(&part, nPart, &part, nPart, eps);
+	ppkernel(part, la, part, lb, eps);
 
 #ifdef __PAPI
 	PAPI_stop(EventSet, &value);
@@ -127,8 +142,8 @@ int main(int argc, char *argv[])
 	printf("PAPI Counter: total %lld FLOPS, speed %f Mflops.\n", value, (double)(value/1048576) / ttime);
 	PAPI_shutdown();
 #endif
-	printf("acc.x.y.z = %lf,%lf,%lf \n", part.acc.x[nPart/2-1],part.acc.y[nPart/2-1],part.acc.z[nPart/2-1]);
-	printf("acc.x.y.z = %lf,%lf,%lf \n", part.acc.x[nPart/2],part.acc.y[nPart/2],part.acc.z[nPart/2]);
+	printf("acc.x.y.z = %lf,%lf,%lf \n", part.acc.x[la/2-1],part.acc.y[la/2-1],part.acc.z[la/2-1]);
+	printf("acc.x.y.z = %lf,%lf,%lf \n", part.acc.x[la/2],part.acc.y[la/2],part.acc.z[la/2]);
  /*
   
     gflops = (double)(1.0e-9 * LOOP_COUNT * MAXFLOPS_ITERS * FLOPSPERCALC);

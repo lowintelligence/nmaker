@@ -23,15 +23,15 @@
     #define PRECTYPE float
     #define SQRT sqrtf
     #define INVSQRT invsqrtf
-    #define L1CNT 1024
-    #define L2CNT 16
+    #define N_CACHE 1024
+    #define CLCNT 16
     #define UNROLL 2
 #else
     #define PRECTYPE double
     #define SQRT sqrt
     #define INVSQRT invsqrt
-    #define L1CNT 512
-    #define L2CNT 16
+    #define N_CACHE 512
+    #define CLCNT 16
     #define UNROLL 2
 #endif
 
@@ -46,4 +46,4 @@ typedef struct {
 	array3 acc;
 } PPPack;
 
-int ppkernel(PPPack *A, int la, PPPack *B, int lb, PRECTYPE eps2);
+int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2);
