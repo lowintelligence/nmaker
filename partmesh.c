@@ -271,7 +271,7 @@ void* convolution_gravity(void *param)
         cut += width;
    //     printf(" [%d] s=%d, cut=%d ab_xstart =%d \n", rank,s, cut,ab_xstart );
     }
-    assert(cut == mesh_nside[0] );
+//    assert(cut == mesh_nside[0] );//Meng!
     ///////////////////
 
 

@@ -23,15 +23,19 @@ void driver(void) {
 
     setup_parameters(&allparam);
     print_parameters(&allparam);
+printf("A0\n");    
 
 //    load_particle_into_domain(&dom, myid, allparam.NumSocket);
     init_particle_into_domain(&dom, &allparam, myid, allparam.NumSocket);
-    
+printf("A\n");    
 	setup_partmesh_environment(&dom, &allparam);
+printf("A1\n");    
 
     decompose_domain(&dom, &allparam);
+printf("A2\n");    
 
     construct_subcuboid(&dom, &allparam);
+printf("A3\n");    
 
 //    broadcast_frontiers(&dom, &allparam) ;
     pthread_t taskcomm;
@@ -44,6 +48,7 @@ void driver(void) {
     pthread_create(&taskcomm, NULL, thread_broad_front, &taskparam);   
 
     pthread_join(taskcomm, NULL);
+printf("A4\n");    
     
 
     build_subtree_on_subcuboid(&dom, &allparam, allparam.NumThreadPerSocket);
@@ -55,7 +60,7 @@ void driver(void) {
     
     pthread_join(taskmesh, NULL);
     
-    inner_traversal(&dom, &allparam, allparam.NumThreadPerSocket);
+//    inner_traversal(&dom, &allparam, allparam.NumThreadPerSocket);
     
 
 }

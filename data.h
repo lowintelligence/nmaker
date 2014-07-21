@@ -35,6 +35,7 @@ typedef real vect3d[DIM];
 typedef struct {
     long int ID; // constant particle ID
     code key; // peano-hilbert key, which could be overlayed.
+	int mortonkey; //Meng!
     int tag;
     int group; // comes from cuboid
     /*    real phi; // gravitional potential, which is optional. */
