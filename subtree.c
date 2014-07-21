@@ -332,7 +332,7 @@ void mt_build_subtree_morton(void *param) {
 			sumcenterx += part[ipart+n].pos[0];
 			sumcentery += part[ipart+n].pos[1];
 			sumcenterz += part[ipart+n].pos[2];
-		}
+		} //comp the masscenter
 		invnpart = 1.0f / (float)pnode->nPart;
 		pnode->masscenter[0] = sumcenterx * invnpart;
 		pnode->masscenter[1] = sumcentery * invnpart;
@@ -348,7 +348,7 @@ void mt_build_subtree_morton(void *param) {
 		while (!endmask || level>MAX_MORTON_LEVEL/* Define the number please */)
 		{
 			endmask = 1;
-			levelshift = (MAX_MORTON_LEVEL-level)*3;
+			levelshift = (MAX_MORTON_LEVEL-level)*DIM; //for computing the key on this level
 			
 			n = 0;
 			// Find and put the first particle into the tree.
@@ -356,22 +356,22 @@ void mt_build_subtree_morton(void *param) {
 			{
 				// If the package is small enough, 
 				// We move to the next up-level node.
-				while(n<mprt && prnode->nPart <= MIN_PACKAGE_SIZE/* Define  */)
+				while(n<mpart && prnode->nPart <= MIN_PACKAGE_SIZE/* Define  */)
 				{
 					n += prnode->nPart;
 					prnode++;
 				}
 			}
-			if (n<mprt)
+			if (n<mpart)
 			{
 				assert (ipart+n == prnode->firstpart);
 				// We have a certain new node of this level.
 				// So we cannot stop scanning at this level.
-				endmask = 0;
+				endmask = 0;//if need a new tree node;
 				curcode = part[ipart+n].mortonkey >> levelshift;
 
 				prnode->childnum++;
-				prnode->firstchild = pnode - root[m];
+				prnode->firstchild = pnode - root[m];//Cao!
 				pnode->level = level;
 				pnode->mortonkey = part[ipart+n].mortonkey & ((~0) << levelshift);
 				pnode->nPart = 1;
