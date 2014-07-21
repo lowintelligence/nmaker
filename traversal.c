@@ -559,3 +559,98 @@ int main(void)
     return 0;
 }
 */
+
+// Cao! Use this critertian for cell/cell acceptance judging. 
+int accepted_cell_to_cell(Node *pTA, Node *pTB, double theta/* Here theta is the open_angle  */)
+{
+	double delta, dr;
+	int d;
+
+//# Strict substraction of R for correct acceptance:
+//	double Rmax = SQROOT3 * (pTA->bmax + pTB->bmax); 
+//#	Alternative subtraction of R:
+	double Rmax = pTA->width + pTB->width;
+
+	dr = 0.0;
+
+#pragma unroll
+	for (d=0; d<DIM; d++)
+	{
+		delta = pTB->masscenter[d] - pTA->masscenter[d];
+		dr += delta*delta;
+	}
+
+	dr = SQRT(dr) - Rmax;
+	if ( Rmax < theta * dr )
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+// Cao! Walk the tree using Dual Tree Traversel algorithm.
+void dtt_process_cell(Node *pTA, Node *pTB, double theta)
+{
+	assert ((pTA->level >=0) && (pTA->level <= MAX_MORTON_LEVEL));
+	assert ((pTB->level >=0) && (pTB->level <= MAX_MORTON_LEVEL));
+
+	if(pTA == pTB)
+	{
+		if (pTA->childnum == 0)
+		{
+			/* Cao! Here we send the tree node, and the Queue      */
+			/*      processing function should pack the particles  */
+			/*      and do some further optimizatoins.             */
+			/*      PQ_ppnode: node pp packs, !0 means accepted    */
+			/*      PQ_particle: save the packed pps.              */
+			EnqueueP_PPnode(PQ_ppnode, pTA, pTB, 0);
+		}
+		else
+		{
+			int i;
+			for (i=0; i<pTA->childnum; i++)
+			{
+				/* Need to be confirmed, so leave a mistake here. */
+				EnqueueP_Cell(PQ_treewalk, pTA->firstchild[-[i]-], pTB, theta);
+			}
+		}
+	}
+	else
+	{
+		if (accepted_cell_to_cell(pTA, pTB, theta))
+		{
+			/* Cao! See comments above. */
+			EnqueueP_PPnode(PQ_ppnode, pTA, pTB, 1);
+		}
+		else
+		{
+			if ( pTA->chlidnum==0 && pTB->childnum==0 )
+			{
+				/* Cao! See comments above. */
+				EnqueueP_PPnode(PQ_ppnode, pTA, pTB, 0);
+			}
+			else if ( pTB->childnum==0 || (pTA->childnum>0 && pTA->width>=pTB->width) )
+			{
+				int i;
+				for (i=0; i<pTA->childnum; i++)
+				{
+					/* Need to be confirmed, so leave a mistake here. */
+					EnqueueP_Cell(PQ_treewalk, pTA->firstchild[-[i]-], pTB, theta);
+				}
+			}
+			else
+			{
+				int i;
+				for (i=0; i<pTB->childnum; i++)
+				{
+					/* Need to be confirmed, so leave a mistake here. */
+					EnqueueP_Cell(PQ_treewalk, pTA, pTB->firstchild[-[i]-], theta);
+				}
+			}
+		}
+	}
+}
+
