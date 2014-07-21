@@ -16,7 +16,7 @@ void naive_walk_cell(int add, int level, int body, Node *tree, Body *part);
 void inner_traversal(Domain *dp, GlobalParam *gp, int nThread);
 
 // Cao!'s functions.
-int accepted_cell_to_cell(Node *pTA, Node *pTB, double theta);
-void dtt_process_cell(Node *pTA, Node *pTB, double theta);
+int accepted_cell_to_cell(int TA, int TB, double theta);
+void dtt_process_cell(int TA, int TB, double theta);
 
 #endif /* TRAVERSAL_H */

@@ -561,7 +561,7 @@ int main(void)
 */
 
 // Cao! Use this critertian for cell/cell acceptance judging. 
-int accepted_cell_to_cell(Node *pTA, Node *pTB, double theta/* Here theta is the open_angle  */)
+int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_angle  */)
 {
 	double delta, dr;
 	int d;
@@ -569,14 +569,14 @@ int accepted_cell_to_cell(Node *pTA, Node *pTB, double theta/* Here theta is the
 //# Strict substraction of R for correct acceptance:
 //	double Rmax = SQROOT3 * (pTA->bmax + pTB->bmax); 
 //#	Alternative subtraction of R:
-	double Rmax = pTA->width + pTB->width;
+	double Rmax = tree[TA]->width + tree[TB]->width;
 
 	dr = 0.0;
 
 #pragma unroll
 	for (d=0; d<DIM; d++)
 	{
-		delta = pTB->masscenter[d] - pTA->masscenter[d];
+		delta = tree[TB]->masscenter[d] - tree[TA]->masscenter[d];
 		dr += delta*delta;
 	}
 
@@ -592,62 +592,59 @@ int accepted_cell_to_cell(Node *pTA, Node *pTB, double theta/* Here theta is the
 }
 
 // Cao! Walk the tree using Dual Tree Traversel algorithm.
-void dtt_process_cell(Node *pTA, Node *pTB, double theta)
+void dtt_process_cell(int TA, int TB, double theta)
 {
-	assert ((pTA->level >=0) && (pTA->level <= MAX_MORTON_LEVEL));
-	assert ((pTB->level >=0) && (pTB->level <= MAX_MORTON_LEVEL));
+	assert ((tree[TA]->level >=0) && (tree[TA]->level <= MAX_MORTON_LEVEL));
+	assert ((tree[TB]->level >=0) && (tree[TB]->level <= MAX_MORTON_LEVEL));
 
-	if(pTA == pTB)
+	if(TA == TB)
 	{
-		if (pTA->childnum == 0)
+		if (tree[TA]->childnum == 0)
 		{
 			/* Cao! Here we send the tree node, and the Queue      */
 			/*      processing function should pack the particles  */
 			/*      and do some further optimizatoins.             */
 			/*      PQ_ppnode: node pp packs, !0 means accepted    */
 			/*      PQ_particle: save the packed pps.              */
-			EnqueueP_PPnode(PQ_ppnode, pTA, pTB, 0);
+			EnqueueP_PPnode(PQ_ppnode, TA, TB, 0);
 		}
 		else
 		{
 			int i;
-			for (i=0; i<pTA->childnum; i++)
+			for (i=0; i<tree[TA]->childnum; i++)
 			{
-				/* Need to be confirmed, so leave a mistake here. */
-				EnqueueP_Cell(PQ_treewalk, pTA->firstchild[-[i]-], pTB, theta);
+				EnqueueP_Cell(PQ_treewalk, tree[TA]->firstchild+i, TB, theta);
 			}
 		}
 	}
 	else
 	{
-		if (accepted_cell_to_cell(pTA, pTB, theta))
+		if (accepted_cell_to_cell(TA, TB, theta))
 		{
 			/* Cao! See comments above. */
-			EnqueueP_PPnode(PQ_ppnode, pTA, pTB, 1);
+			EnqueueP_PPnode(PQ_ppnode, TA, TB, 1);
 		}
 		else
 		{
-			if ( pTA->chlidnum==0 && pTB->childnum==0 )
+			if ( tree[TA]->chlidnum==0 && tree[TB]->childnum==0 )
 			{
 				/* Cao! See comments above. */
-				EnqueueP_PPnode(PQ_ppnode, pTA, pTB, 0);
+				EnqueueP_PPnode(PQ_ppnode, TA, TB, 0);
 			}
-			else if ( pTB->childnum==0 || (pTA->childnum>0 && pTA->width>=pTB->width) )
+			else if ( tree[TB]->childnum==0 || (tree[TA]->childnum>0 && tree[TA]->width>=tree[TB]->width) )
 			{
 				int i;
-				for (i=0; i<pTA->childnum; i++)
+				for (i=0; i<tree[TA]->childnum; i++)
 				{
-					/* Need to be confirmed, so leave a mistake here. */
-					EnqueueP_Cell(PQ_treewalk, pTA->firstchild[-[i]-], pTB, theta);
+					EnqueueP_Cell(PQ_treewalk, tree[TA]->firstchild+i, TB, theta);
 				}
 			}
 			else
 			{
 				int i;
-				for (i=0; i<pTB->childnum; i++)
+				for (i=0; i<tree[TB]->childnum; i++)
 				{
-					/* Need to be confirmed, so leave a mistake here. */
-					EnqueueP_Cell(PQ_treewalk, pTA, pTB->firstchild[-[i]-], theta);
+					EnqueueP_Cell(PQ_treewalk, TA, tree[TB]->firstchild+i, theta);
 				}
 			}
 		}

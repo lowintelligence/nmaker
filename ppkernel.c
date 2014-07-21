@@ -17,6 +17,16 @@ double dtime()
 	return (tseconds);
 }
 
+int get_block_tnum(int bid)
+{
+	return omp_get_num_threads();
+}
+
+int get_block_tid(int bid)
+{
+	return omp_get_thread_num();
+}
+
 int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 {
     int n;
@@ -60,21 +70,25 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 		PRECTYPE dx3, dy3, dz3, dr23, dr33;
 		PRECTYPE dx4, dy4, dz4, dr24, dr34;
 
-		tid = omp_get_thread_num();
-		tnum = omp_get_num_threads();
+		tid = get_block_tid(0);
+		tnum = get_block_tnum(0);
 	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
 
 		if( (nb >= (tnum<<1)) && (lb > CLCNT) ) // The num of A and B are all large enough
 		{
-#pragma omp for schedule(static)
-			for ( n=0; n<nb; n++ ) {
+//			int nbs = tid*(nb/tnum)+((nb%tnum)+tid)/tnum*((nb+tid)%tnum);
+//			int nbt = nbs + (nb+tid)/tnum;
+			int nbs = tid*(nb/tnum)+(tnum+(nb%tnum)-tid)/tnum*(tid%tnum);
+			int nbt = nbs + (nb+tnum-1-tid)/tnum;
+//			printf ("Thread[%d]: nbs = %d, nbt = %d.\n", tid, nbs, nbt);
+			for ( n=nbs; n<nbt; n++ ) {
 
 				nt = (n==nb-1) ? la : (n+1)*CLCNT;
 
 				for (m=0; m<mb; m++) {
-#ifdef _OPENMP
+#ifdef __MULTI_THREAD_
 					mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #else
 					mt = m*N_CACHE + ((m==mb-1) ? (lb-m*N_CACHE)/UNROLL : N_CACHE/UNROLL);
@@ -97,8 +111,7 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 							az2=0;
 
 #pragma ivdep
-#pragma vector aligned
-#ifdef _OPENMP
+#ifdef __MULTI_THREAD_
 							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
 							for (k=m*N_CACHE; k<mt; k++)
@@ -142,7 +155,7 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 
 #pragma ivdep
 #pragma vector aligned
-#ifdef _OPENMP
+#ifdef __MULTI_THREAD_
 							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
 							for (k=m*N_CACHE; k<mt; k++)
@@ -227,12 +240,14 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 		}
 		else if ( lb > CLCNT )
 		{
-			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
-			int nt = ns + (la+tid)/tnum;
+//			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
+//			int nt = ns + (la+tid)/tnum;
+			int ns = tid*(la/tnum)+(tnum+(la%tnum)-tid)/tnum*(tid%tnum);
+			int nt = ns + (la+tnum-1-tid)/tnum;
 
 			for (m=0; m<mb; m++)
 			{
-#ifdef _OPENMP
+#ifdef __MULTI_THREAD_
 				mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #else
 				mt = m*N_CACHE + ((m==mb-1) ? (lb-m*N_CACHE)/UNROLL : N_CACHE/UNROLL);
@@ -251,8 +266,7 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 					if ( mt == lb ) // No unrolling at the last B block
 					{
 #pragma ivdep
-#pragma vector aligned
-#ifdef _OPENMP
+#ifdef __MULTI_THREAD_
 						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
 						for (k=m*N_CACHE; k<mt; k++)
@@ -277,8 +291,7 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 					else // Unrolling
 					{
 #pragma ivdep
-#pragma vector aligned
-#ifdef _OPENMP
+#ifdef __MULTI_THREAD_
 						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
 						for (k=m*N_CACHE; k<mt; k++)
@@ -362,8 +375,10 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 		}
 		else
 		{
-			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
-			int nt = ns + (la+tid)/tnum;
+//			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
+//			int nt = ns + (la+tid)/tnum;
+			int ns = tid*(la/tnum)+(tnum+(la%tnum)-tid)/tnum*(tid%tnum);
+			int nt = ns + (la+tnum-1-tid)/tnum;
 //			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
 			for (m=0; m<lb; m++)
 			{

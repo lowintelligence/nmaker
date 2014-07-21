@@ -24,8 +24,8 @@
     #define SQRT sqrtf
     #define INVSQRT invsqrtf
     #define N_CACHE 1024
-    #define CLCNT 16
-    #define UNROLL 2
+    #define CLCNT 64
+    #define UNROLL 4
 #else
     #define PRECTYPE double
     #define SQRT sqrt
@@ -33,6 +33,10 @@
     #define N_CACHE 512
     #define CLCNT 16
     #define UNROLL 2
+#endif
+
+#ifdef _OPENMP
+	#define __MULTI_THREAD_
 #endif
 
 typedef struct {
@@ -45,5 +49,14 @@ typedef struct {
 	array3 pos;
 	array3 acc;
 } PPPack;
+
+// To be finished later if needed.
+//int get_global_tnum();
+//int get_global_tid();
+//int get_local_tnum();
+//int get_local_tid();
+
+int get_block_tnum(int bid);
+int get_block_tid(int bid);
 
 int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2);

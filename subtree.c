@@ -313,7 +313,7 @@ void mt_build_subtree_morton(void *param) {
 		// Calculate the root node.
 		sumcenterx = sumcentery = sumcenterz = 0;
 
-		Node* pnode = &tree[root[m]];
+		Node* pnode = tree + root[m];
 
 		pnode->level = 0;
 		pnode->firstpart = ipart;
@@ -341,7 +341,7 @@ void mt_build_subtree_morton(void *param) {
 
 		int level = 1;
 		int endmask = 0;
-		Node* prnode = &tree[root[m]];
+		Node* prnode = tree + root[m];
 
         printf(" [%d] building the mesh(%d), particles in mesh = %d.\n", rank, mpart);
 
@@ -371,7 +371,7 @@ void mt_build_subtree_morton(void *param) {
 				curcode = part[ipart+n].mortonkey >> levelshift;
 
 				prnode->childnum++;
-				prnode->firstchild = pnode - root[m];//Cao!
+				prnode->firstchild = pnode - tree;//Cao!
 				pnode->level = level;
 				pnode->mortonkey = part[ipart+n].mortonkey & ((~0) << levelshift);
 				pnode->nPart = 1;
@@ -411,7 +411,7 @@ void mt_build_subtree_morton(void *param) {
 
 					curcode = part[ipart+n].mortonkey >> levelshift;
 
-					if ( (curcode^(prnode->mortonkey>>levelshift)) >> 3 )
+					if ( (curcode^(prnode->mortonkey>>levelshift)) >> DIM )
 					{
 						// We finished all children of one node,
 						// then shift to the next up-level node.
@@ -420,7 +420,7 @@ void mt_build_subtree_morton(void *param) {
 						{
 							// If the package is small enough, 
 							// We move to the next up-level node.
-							while(n<mpart && prnode->pNode <= MIN_PACKAGE_SIZE)
+							while(n<mpart && prnode->nPart <= MIN_PACKAGE_SIZE)
 							{
 								n += prnode->nPart;
 								prnode++;
@@ -432,7 +432,7 @@ void mt_build_subtree_morton(void *param) {
 						curcode = part[ipart+n].mortonkey >> levelshift;
 					}	
 						
-					prnode->firstchild = pnode - root[m];
+					prnode->firstchild = pnode - tree;
 					prnode->childnum++;
 					pnode->level = level;
 					pnode->mortonkey = curcode << levelshift;

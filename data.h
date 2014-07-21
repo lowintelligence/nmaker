@@ -44,6 +44,7 @@ typedef struct {
     real  mass;
 } Body;  // Body of N-Body, You knew it.
 
+/* Old traditional node structure.
 typedef struct {
     int nPart;
     int sub[8]; // index  of sub-oct-tree
@@ -52,21 +53,22 @@ typedef struct {
 //    vect3d center;  // geometry center
     vect3d masscenter; // mass center
 } Node;
+*/
 
-/* Cao! New structure for morton key tree.
- * We now have continous memory local trees!
+// Cao! New structure for morton key tree.
+// We now have continous memory local trees!
 typedef struct {
 	int nPart;
-	int firstpart; // index of particle
-	int firstchild; // memory offset accoring to the root
+	int firstpart; // index of particle.
+	int firstchild; // index of the first child according to big node array.
 	int childnum;
 	int level;
 	int mortonkey;
 	real width;
 	real mass;
 	vect3d masscenter;
-}
-*/
+} Node;
+
 
 typedef struct {
     int NumTree;
