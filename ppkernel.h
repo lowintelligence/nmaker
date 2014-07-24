@@ -16,8 +16,12 @@
  * =====================================================================================
  */
 
+#ifndef _PPKERNEL_H_
+#define _PPKERNEL_H_
+
 #define ALIGNCNT 64
 #define __single_prec
+#define EPS2 0.00026
 
 #ifdef __single_prec
     #define PRECTYPE float
@@ -59,3 +63,5 @@ int get_block_tnum(int bid);
 int get_block_tid(int bid);
 
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C);
+
+#endif

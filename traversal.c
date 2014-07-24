@@ -6,7 +6,7 @@ static Body *part;
 static Node *tree; // thread number
 static int FIRST_NODE;
 double open_angle;
-
+/*  
 int accepted_cell_branes(int one, int ns, Node *tree, Body *part)
 {
     int d, n, id;
@@ -80,10 +80,10 @@ void naive_walk_cell(int add, int level, int body, Node *tree, Body *part)
             }
         }
 }
-
+*/
 
 /* task pool */
-
+/*  
 void inner_traversal(Domain *dp, GlobalParam *gp, int nThread) {
     int i,j,k, ic, jc, kc;
     int In, Jn, Kn;
@@ -119,7 +119,7 @@ void inner_traversal(Domain *dp, GlobalParam *gp, int nThread) {
     printf("cnt = %d\n", cnt);
 
 }
-
+*/
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -569,14 +569,14 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 //# Strict substraction of R for correct acceptance:
 //	double Rmax = SQROOT3 * (pTA->bmax + pTB->bmax); 
 //#	Alternative subtraction of R:
-	double Rmax = tree[TA]->width + tree[TB]->width;
+	double Rmax = tree[TA].width + tree[TB].width;
 
 	dr = 0.0;
 
 #pragma unroll
 	for (d=0; d<DIM; d++)
 	{
-		delta = tree[TB]->masscenter[d] - tree[TA]->masscenter[d];
+		delta = tree[TB].masscenter[d] - tree[TA].masscenter[d];
 		dr += delta*delta;
 	}
 
@@ -592,14 +592,14 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 }
 
 // Cao! Walk the tree using Dual Tree Traversel algorithm.
-void dtt_process_cell(int TA, int TB, double theta)
+int dtt_process_cell(int TA, int TB, double theta, PPQ *PQ_ppnode, TWQ *PQ_treewalk)
 {
-	assert ((tree[TA]->level >=0) && (tree[TA]->level <= MAX_MORTON_LEVEL));
-	assert ((tree[TB]->level >=0) && (tree[TB]->level <= MAX_MORTON_LEVEL));
+	assert ((tree[TA].level >=0) && (tree[TA].level <= MAX_MORTON_LEVEL));
+	assert ((tree[TB].level >=0) && (tree[TB].level <= MAX_MORTON_LEVEL));
 
 	if(TA == TB)
 	{
-		if (tree[TA]->childnum == 0)
+		if (tree[TA].childnum == 0)
 		{
 			/* Cao! Here we send the tree node, and the Queue      */
 			/*      processing function should pack the particles  */
@@ -611,9 +611,9 @@ void dtt_process_cell(int TA, int TB, double theta)
 		else
 		{
 			int i;
-			for (i=0; i<tree[TA]->childnum; i++)
+			for (i=0; i<tree[TA].childnum; i++)
 			{
-				EnqueueP_Cell(PQ_treewalk, tree[TA]->firstchild+i, TB, theta);
+				EnqueueP_Cell(PQ_treewalk, tree[TA].firstchild+i, TB, theta);
 			}
 		}
 	}
@@ -626,28 +626,105 @@ void dtt_process_cell(int TA, int TB, double theta)
 		}
 		else
 		{
-			if ( tree[TA]->chlidnum==0 && tree[TB]->childnum==0 )
+			if ( tree[TA].childnum==0 && tree[TB].childnum==0 )
 			{
 				/* Cao! See comments above. */
 				EnqueueP_PPnode(PQ_ppnode, TA, TB, 0);
 			}
-			else if ( tree[TB]->childnum==0 || (tree[TA]->childnum>0 && tree[TA]->width>=tree[TB]->width) )
+			else if ( tree[TB].childnum==0 || (tree[TA].childnum>0 && tree[TA].width>=tree[TB].width) )
 			{
 				int i;
-				for (i=0; i<tree[TA]->childnum; i++)
+				for (i=0; i<tree[TA].childnum; i++)
 				{
-					EnqueueP_Cell(PQ_treewalk, tree[TA]->firstchild+i, TB, theta);
+					EnqueueP_Cell(PQ_treewalk, tree[TA].firstchild+i, TB, theta);
 				}
 			}
 			else
 			{
 				int i;
-				for (i=0; i<tree[TB]->childnum; i++)
+				for (i=0; i<tree[TB].childnum; i++)
 				{
-					EnqueueP_Cell(PQ_treewalk, TA, tree[TB]->firstchild+i, theta);
+					EnqueueP_Cell(PQ_treewalk, TA, tree[TB].firstchild+i, theta);
 				}
 			}
 		}
 	}
 }
+
+void dtt_traversal(Domain *dp, GlobalParam *gp)
+{
+    int i,j,k, ic, jc, kc;
+    int In, Jn, Kn;
+    int level;
+    int group, index;
+    int first_node;
+    int npart;
+
+    Node *tree;
+    Body* part;
+    DomainTree *dtp = dp->domtree;
+
+    npart = dp->NumPart;
+    part = dp->Part;
+    tree = dp->domtree->tree;
+    FIRST_NODE = dp->NumPart;
+
+    open_angle = 0.3;
+    level = gp->NumBits;
+    int cnt = 0;
+    In = dp->cuboid->nSide[0];
+    Jn = dp->cuboid->nSide[1];
+    Kn = dp->cuboid->nSide[2];
+
+	TWQ PQ_treewalk;
+	PPQ PQ_ppnode;
+
+	init_queue_pp(&PQ_ppnode);
+	init_queue_tw(&PQ_treewalk);
+
+	for (i=0; i<In; i++)
+	{
+		for (j=0; j<Jn; j++)
+		{
+			for (k=0; k<Kn; k++)
+			{
+				int n;
+				int m;
+				int l;
+				int cella = i*(Jn*Kn)+j*Kn+k;
+				for (n=i-1; i<i+2; n++)
+				{
+					for (m=j-1; m<j+2; m++)
+					{
+						for (l=k-1; l<k+2; k++)
+						{
+							int cellb = n*(Jn*Kn)+m*Kn+l;
+							if (dtp->numparticles[cella]>0 && dtp->numparticles[cellb]>0)
+							{
+								EnqueueP_Cell(&PQ_treewalk, dtp->root_cell[cella], dtp->root_cell[cellb], open_angle);
+								cnt++;
+							}
+						}
+					}
+
+				}
+			}
+		}
+	}
+    printf("cnt = %d\n", cnt);
+
+	while(PQ_treewalk.length>0)
+	{
+		ProcessQP_Cell(&PQ_treewalk, &PQ_ppnode, dtt_process_cell);
+	}
+
+	while(PQ_ppnode.length>0)
+	{
+		ProcessQP_PPnode(&PQ_ppnode, ppkernel);
+	}
+
+	destroy_queue_pp(&PQ_ppnode);
+	destroy_queue_tw(&PQ_treewalk);
+}
+
 
