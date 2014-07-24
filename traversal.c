@@ -573,7 +573,8 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 
 	dr = 0.0;
 
-#pragma unroll
+//	printf("accept.\n");
+//	sleep(10);
 	for (d=0; d<DIM; d++)
 	{
 		delta = tree[TB].masscenter[d] - tree[TA].masscenter[d];
@@ -594,8 +595,10 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 // Cao! Walk the tree using Dual Tree Traversel algorithm.
 int dtt_process_cell(int TA, int TB, double theta, PPQ *PQ_ppnode, TWQ *PQ_treewalk)
 {
-	assert ((tree[TA].level >=0) && (tree[TA].level <= MAX_MORTON_LEVEL));
-	assert ((tree[TB].level >=0) && (tree[TB].level <= MAX_MORTON_LEVEL));
+//	assert ((tree[TA].level >=0) && (tree[TA].level <= MAX_MORTON_LEVEL));
+//	assert ((tree[TB].level >=0) && (tree[TB].level <= MAX_MORTON_LEVEL));
+
+//	printf("process. TA=%d, TB=%d, theta=%.2f.\n", TA, TB, theta);
 
 	if(TA == TB)
 	{
@@ -660,8 +663,8 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
     int first_node;
     int npart;
 
-    Node *tree;
-    Body* part;
+//    Node *tree;
+//    Body* part;
     DomainTree *dtp = dp->domtree;
 
     npart = dp->NumPart;
@@ -679,29 +682,36 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	TWQ PQ_treewalk;
 	PPQ PQ_ppnode;
 
+	initGlobal(part, tree);
+	printf("Init queue ppnode.\n");
 	init_queue_pp(&PQ_ppnode);
+	printf("Init queue treewalk.\n");
 	init_queue_tw(&PQ_treewalk);
 
-	for (i=0; i<In; i++)
+	for (i=1; i<In-1; i++)
 	{
-		for (j=0; j<Jn; j++)
+		for (j=1; j<Jn-1; j++)
 		{
-			for (k=0; k<Kn; k++)
+			for (k=1; k<Kn-1; k++)
 			{
 				int n;
 				int m;
 				int l;
 				int cella = i*(Jn*Kn)+j*Kn+k;
-				for (n=i-1; i<i+2; n++)
+//				printf("Processing i:%d, j:%d, k:%d  ", i, j, k);
+				for (n=i-1; n<i+2; n++)
 				{
 					for (m=j-1; m<j+2; m++)
 					{
-						for (l=k-1; l<k+2; k++)
+						for (l=k-1; l<k+2; l++)
 						{
 							int cellb = n*(Jn*Kn)+m*Kn+l;
 							if (dtp->numparticles[cella]>0 && dtp->numparticles[cellb]>0)
 							{
+								if(dtp->root_cell[cella]==0)
+								printf("enqueue: i:%d, j:%d, k:%d, n:%d, m:%d, l:%d, ta:%d, tb:%d, na=%d, nb=%d\n", i, j, k, n, m, l, dtp->root_cell[cella], dtp->root_cell[cellb], tree[dtp->root_cell[cella]].nPart, tree[dtp->root_cell[cellb]].nPart);
 								EnqueueP_Cell(&PQ_treewalk, dtp->root_cell[cella], dtp->root_cell[cellb], open_angle);
+//								printf("E");
 								cnt++;
 							}
 						}
@@ -711,17 +721,21 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 			}
 		}
 	}
-    printf("cnt = %d\n", cnt);
+    printf("\ncnt = %d\n", cnt);
 
 	while(PQ_treewalk.length>0)
 	{
 		ProcessQP_Cell(&PQ_treewalk, &PQ_ppnode, dtt_process_cell);
 	}
+	printf("\nQueue process finishing, total %d pp pairs.\n", PQ_ppnode.length);
+	sleep(2);
 
 	while(PQ_ppnode.length>0)
 	{
 		ProcessQP_PPnode(&PQ_ppnode, ppkernel);
 	}
+	printf("\nPP processing finished.\n");
+	sleep(2);
 
 	destroy_queue_pp(&PQ_ppnode);
 	destroy_queue_tw(&PQ_treewalk);

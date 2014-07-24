@@ -23,19 +23,25 @@ void driver(void) {
 
     setup_parameters(&allparam);
     print_parameters(&allparam);
-printf("A0\n");    
+
+  clock_t time_start,time_end;
+  time_start=clock();
 
 //    load_particle_into_domain(&dom, myid, allparam.NumSocket);
     init_particle_into_domain(&dom, &allparam, myid, allparam.NumSocket);
-printf("A\n");    
+  time_end=clock();
+  printf("time A0 init:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 	setup_partmesh_environment(&dom, &allparam);
-printf("A1\n");    
+  time_end=clock();
+  printf("time A1 setup partmesh:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 
     decompose_domain(&dom, &allparam);
-printf("A2\n");    
+  time_end=clock();
+  printf("time A2 decompose:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 
     construct_subcuboid(&dom, &allparam);
-printf("A3\n");    
+  time_end=clock();
+  printf("time A3 subcuboid:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 
 //    broadcast_frontiers(&dom, &allparam) ;
     pthread_t taskcomm;
@@ -48,18 +54,26 @@ printf("A3\n");
     pthread_create(&taskcomm, NULL, thread_broad_front, &taskparam);   
 
     pthread_join(taskcomm, NULL);
-printf("A4\n");    
+  time_end=clock();
+  printf("time A4 broad front:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
     
 
     build_subtree_on_subcuboid(&dom, &allparam, allparam.NumThreadPerSocket);
+  time_end=clock();
+  printf("time A5 subtree:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 
 //	convolution_gravity(&taskparam);
 
     
     pthread_create(&taskmesh, NULL, convolution_gravity, &taskparam);
-    
+//    
     pthread_join(taskmesh, NULL);
+  time_end=clock();
+  printf("time A6 PM:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
     
+    dtt_traversal(&dom, &allparam);
+  time_end=clock();
+  printf("time total:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 //    inner_traversal(&dom, &allparam, allparam.NumThreadPerSocket);
     
 
