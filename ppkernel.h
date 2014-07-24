@@ -43,13 +43,12 @@ typedef struct {
 	PRECTYPE *x;
 	PRECTYPE *y;
 	PRECTYPE *z;
-} array3;
+} Array3;
 
 typedef struct {
-	array3 pos;
-	array3 acc;
+    Array3 pos;
+    Array3 acc;
 } PPPack;
-
 // To be finished later if needed.
 //int get_global_tnum();
 //int get_global_tid();
@@ -59,4 +58,4 @@ typedef struct {
 int get_block_tnum(int bid);
 int get_block_tid(int bid);
 
-int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2);
+int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C);

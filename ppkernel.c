@@ -27,7 +27,7 @@ int get_block_tid(int bid)
 	return omp_get_thread_num();
 }
 
-int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
+int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 {
     int n;
     double tstart, tstop, ttime;
@@ -39,16 +39,16 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
     
     for ( n=0; n<la; n++ ) {
         for ( m=0; m<lb; m++) {
-            dx1 = B.pos.x[m] -  A.pos.x[n];
-            dy1 = B.pos.y[m] -  A.pos.y[n];
-            dz1 = B.pos.z[m] -  A.pos.z[n];
+            dx1 = B.x[m] -  A.x[n];
+            dy1 = B.y[m] -  A.y[n];
+            dz1 = B.z[m] -  A.z[n];
             
             dr21 = eps2 + dx*dx + dy*dy + dz*dz;
             dr31 = SQRT(dr2)*dr2;
             
-            A.acc.x[n] += dx1/dr31;
-            A.acc.y[n] += dy1/dr31;
-            A.acc.z[n] += dz1/dr31;
+            C.x[n] += dx1/dr31;
+            C.y[n] += dy1/dr31;
+            C.z[n] += dz1/dr31;
         }
     }
 
@@ -64,7 +64,7 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 	{
 		int j, k, m, nb, mb, nt, mt, tid, tnum;
 
-		PRECTYPE px2, py2, pz2, ax2, ay2, az2;
+		PRECTYPE x2, y2, z2, ax2, ay2, az2;
 		PRECTYPE dx1, dy1, dz1, dr21, dr31;
 		PRECTYPE dx2, dy2, dz2, dr22, dr32;
 		PRECTYPE dx3, dy3, dz3, dr23, dr33;
@@ -97,14 +97,14 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 					if ( mt == lb ) // No unrolling at the last B block
 					{
 //						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, ((m+tid)%mb)*N_CACHE, mt);
-//#pragma prefetch A.pos.x:1:CLCNT
-//#pragma prefetch A.pos.y:1:CLCNT
-//#pragma prefetch A.pos.z:1:CLCNT
+//#pragma prefetch A.x:1:CLCNT
+//#pragma prefetch A.y:1:CLCNT
+//#pragma prefetch A.z:1:CLCNT
 						for (j=n*CLCNT; j<nt; j++)
 						{
-							px2=A.pos.x[j];
-							py2=A.pos.y[j];
-							pz2=A.pos.z[j];
+							x2=A.x[j];
+							y2=A.y[j];
+							z2=A.z[j];
 
 							ax2=0;
 							ay2=0;
@@ -117,9 +117,9 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B.pos.x[k] - px2;
-								dy1 = B.pos.y[k] - py2;
-								dz1 = B.pos.z[k] - pz2;
+								dx1 = B.x[k] - x2;
+								dy1 = B.y[k] - y2;
+								dz1 = B.z[k] - z2;
 
 								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #ifdef __single_prec
@@ -133,21 +133,21 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 								az2 += dz1*dr31 ;
 							}
 
-							A.acc.x[j] += ax2;
-							A.acc.y[j] += ay2;
-							A.acc.z[j] += az2;
+							C.x[j] += ax2;
+							C.y[j] += ay2;
+							C.z[j] += az2;
 						}
 					}
 					else // Unrolling the loop
 					{
-//#pragma prefetch A.pos.x:1:CLCNT
-//#pragma prefetch A.pos.y:1:CLCNT
-//#pragma prefetch A.pos.z:1:CLCNT
+//#pragma prefetch A.x:1:CLCNT
+//#pragma prefetch A.y:1:CLCNT
+//#pragma prefetch A.z:1:CLCNT
 						for (j=n*CLCNT; j<nt; j++)
 						{
-							px2=A.pos.x[j];
-							py2=A.pos.y[j];
-							pz2=A.pos.z[j];
+							x2=A.x[j];
+							y2=A.y[j];
+							z2=A.z[j];
 
 							ax2=0;
 							ay2=0;
@@ -161,21 +161,21 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B.pos.x[k] - px2;
-								dy1 = B.pos.y[k] - py2;
-								dz1 = B.pos.z[k] - pz2;
+								dx1 = B.x[k] - x2;
+								dy1 = B.y[k] - y2;
+								dz1 = B.z[k] - z2;
 #if (UNROLL > 1)
-								dx2 = B.pos.x[k+N_CACHE/UNROLL] - px2;
-								dy2 = B.pos.y[k+N_CACHE/UNROLL] - py2;
-								dz2 = B.pos.z[k+N_CACHE/UNROLL] - pz2;
+								dx2 = B.x[k+N_CACHE/UNROLL] - x2;
+								dy2 = B.y[k+N_CACHE/UNROLL] - y2;
+								dz2 = B.z[k+N_CACHE/UNROLL] - z2;
 #if (UNROLL >= 4)
-								dx3 = B.pos.x[k+2*N_CACHE/UNROLL] - px2;
-								dy3 = B.pos.y[k+2*N_CACHE/UNROLL] - py2;
-								dz3 = B.pos.z[k+2*N_CACHE/UNROLL] - pz2;
+								dx3 = B.x[k+2*N_CACHE/UNROLL] - x2;
+								dy3 = B.y[k+2*N_CACHE/UNROLL] - y2;
+								dz3 = B.z[k+2*N_CACHE/UNROLL] - z2;
 
-								dx4 = B.pos.x[k+3*N_CACHE/UNROLL] - px2;
-								dy4 = B.pos.y[k+3*N_CACHE/UNROLL] - py2;
-								dz4 = B.pos.z[k+3*N_CACHE/UNROLL] - pz2;
+								dx4 = B.x[k+3*N_CACHE/UNROLL] - x2;
+								dy4 = B.y[k+3*N_CACHE/UNROLL] - y2;
+								dz4 = B.z[k+3*N_CACHE/UNROLL] - z2;
 #endif				
 #endif
 
@@ -230,9 +230,9 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 #endif
 							}
 
-							A.acc.x[j] += ax2;
-							A.acc.y[j] += ay2;
-							A.acc.z[j] += az2;
+							C.x[j] += ax2;
+							C.y[j] += ay2;
+							C.z[j] += az2;
 						}
 					}
 				}
@@ -255,9 +255,9 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 
 				for (j=ns; j<nt; j++)
 				{
-					px2=A.pos.x[j];
-					py2=A.pos.y[j];
-					pz2=A.pos.z[j];
+					x2=A.x[j];
+					y2=A.y[j];
+					z2=A.z[j];
 
 					ax2=0;
 					ay2=0;
@@ -272,9 +272,9 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B.pos.x[k] - px2;
-							dy1 = B.pos.y[k] - py2;
-							dz1 = B.pos.z[k] - pz2;
+							dx1 = B.x[k] - x2;
+							dy1 = B.y[k] - y2;
+							dz1 = B.z[k] - z2;
 
 							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #ifdef __single_prec
@@ -297,21 +297,21 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B.pos.x[k] - px2;
-							dy1 = B.pos.y[k] - py2;
-							dz1 = B.pos.z[k] - pz2;
+							dx1 = B.x[k] - x2;
+							dy1 = B.y[k] - y2;
+							dz1 = B.z[k] - z2;
 #if (UNROLL > 1)
-							dx2 = B.pos.x[k+N_CACHE/UNROLL] - px2;
-							dy2 = B.pos.y[k+N_CACHE/UNROLL] - py2;
-							dz2 = B.pos.z[k+N_CACHE/UNROLL] - pz2;
+							dx2 = B.x[k+N_CACHE/UNROLL] - x2;
+							dy2 = B.y[k+N_CACHE/UNROLL] - y2;
+							dz2 = B.z[k+N_CACHE/UNROLL] - z2;
 #if (UNROLL >= 4)
-							dx3 = B.pos.x[k+2*N_CACHE/UNROLL] - px2;
-							dy3 = B.pos.y[k+2*N_CACHE/UNROLL] - py2;
-							dz3 = B.pos.z[k+2*N_CACHE/UNROLL] - pz2;
+							dx3 = B.x[k+2*N_CACHE/UNROLL] - x2;
+							dy3 = B.y[k+2*N_CACHE/UNROLL] - y2;
+							dz3 = B.z[k+2*N_CACHE/UNROLL] - z2;
 
-							dx4 = B.pos.x[k+3*N_CACHE/UNROLL] - px2;
-							dy4 = B.pos.y[k+3*N_CACHE/UNROLL] - py2;
-							dz4 = B.pos.z[k+3*N_CACHE/UNROLL] - pz2;
+							dx4 = B.x[k+3*N_CACHE/UNROLL] - x2;
+							dy4 = B.y[k+3*N_CACHE/UNROLL] - y2;
+							dz4 = B.z[k+3*N_CACHE/UNROLL] - z2;
 #endif				
 #endif
 
@@ -367,9 +367,9 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 						}
 					}
 
-					A.acc.x[j] += ax2;
-					A.acc.y[j] += ay2;
-					A.acc.z[j] += az2;
+					C.x[j] += ax2;
+					C.y[j] += ay2;
+					C.z[j] += az2;
 				}
 			}
 		}
@@ -382,15 +382,15 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 //			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
 			for (m=0; m<lb; m++)
 			{
-				px2 = B.pos.x[m];
-				py2 = B.pos.y[m];
-				pz2 = B.pos.z[m];
+				x2 = B.x[m];
+				y2 = B.y[m];
+				z2 = B.z[m];
 #pragma ivdep
 				for (k=ns; k<nt; k++)
 				{
-					dx1 = px2 - A.pos.x[k];
-					dy1 = py2 - A.pos.y[k];
-					dz1 = pz2 - A.pos.z[k];
+					dx1 = x2 - A.x[k];
+					dy1 = y2 - A.y[k];
+					dz1 = z2 - A.z[k];
 
 					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #ifdef __single_prec
@@ -399,9 +399,9 @@ int ppkernel(PPPack A, int la, PPPack B, int lb, PRECTYPE eps2)
 					dr31 = INVSQRT(dr21 * dr21 * dr21);
 #endif
 
-					A.acc.x[k] += dx1*dr31 ;
-					A.acc.y[k] += dy1*dr31 ;
-					A.acc.z[k] += dz1*dr31 ;
+					C.x[k] += dx1*dr31 ;
+					C.y[k] += dy1*dr31 ;
+					C.z[k] += dz1*dr31 ;
 				}
 			}
 		}

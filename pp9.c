@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
 	PAPI_start(EventSet);
 #endif
 
-	ppkernel(part, la, part, lb, eps);
+	ppkernel(part.pos, la, part.pos, lb, eps, part.acc);
 
 #ifdef __PAPI
 	PAPI_stop(EventSet, &value);
