@@ -197,7 +197,7 @@ void construct_tree(int nPart, double size)
     LAST_NODE  = nPart;
     NODELENGTH = nPart;
 
-    tree = (NODE*)malloc( (int) sizeof(NODE) * NODELENGTH );
+    tree = (NODE*)malloc( sizeof(NODE) * NODELENGTH );
     for (n=0; n<NODELENGTH; n++) {
         tree[n].nPart = 0;
         for (d=0; d<(1<<DIM); d++)
@@ -413,8 +413,8 @@ void walk_tree_for_gravity(int nPart)
     clock_t begin, end;
     double time_spent;
     begin = clock();
-    opencell = (int*)malloc((int)sizeof(int)*2.5*nPart);
-    accept   = (int*)malloc((int)sizeof(int)*2.5*nPart);
+    opencell = (int*)malloc(sizeof(int)*5/2*nPart);
+    accept   = (int*)malloc(sizeof(int)*5/2*nPart);
     opencell[0] = FIRST_NODE;
     walk_cell(FIRST_NODE, 0, 0, 0, 0);
     end = clock();
@@ -517,7 +517,7 @@ int main(void)
     nPart = 20000000;
     box = 1.0;
     seed = 4658714;
-    part = (BODY*)malloc( (int) sizeof (BODY)*nPart );
+    part = (BODY*)malloc( sizeof (BODY)*nPart );
     for (n=0; n<nPart; n++) {
         for (d=0; d<DIM; d++) {
             part[n].pos[d] = box*ran3(&seed);
@@ -662,6 +662,7 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
     int group, index;
     int first_node;
     int npart;
+	Array3 pa, pb, pc;
 
 //    Node *tree;
 //    Body* part;
@@ -728,14 +729,32 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 		ProcessQP_Cell(&PQ_treewalk, &PQ_ppnode, dtt_process_cell);
 	}
 	printf("\nQueue process finishing, total %d pp pairs.\n", PQ_ppnode.length);
-	sleep(2);
+
+	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pb.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pb.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pb.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pc.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pc.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pc.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
 
 	while(PQ_ppnode.length>0)
 	{
-		ProcessQP_PPnode(&PQ_ppnode, ppkernel);
+		ProcessQP_PPnode(&PQ_ppnode, ppkernel, pa, pb, pc);
 	}
 	printf("\nPP processing finished.\n");
-	sleep(2);
+
+	free(pa.x);
+	free(pa.y);
+	free(pa.z);
+	free(pb.x);
+	free(pb.y);
+	free(pb.z);
+	free(pc.x);
+	free(pc.y);
+	free(pc.z);
 
 	destroy_queue_pp(&PQ_ppnode);
 	destroy_queue_tw(&PQ_treewalk);

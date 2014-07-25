@@ -19,8 +19,8 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
     code *codeSplit;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
-    nSample    = (int*)malloc( (int) sizeof(int)*nDomain );
-    dispSample = (int*)malloc( (int) sizeof(int)*nDomain );
+    nSample    = (int*)malloc(sizeof(int)*nDomain );
+    dispSample = (int*)malloc(sizeof(int)*nDomain );
 
     total = 0;
     for (n=0; n<nDomain; n++) {
@@ -33,8 +33,8 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
     for (n=1; n<nDomain; n++)
         dispSample[n] = nSample[n-1] + dispSample[n-1];
 
-    sendBuffer = (Sample*)malloc( (int)sizeof(Sample)*nSample[myid] );
-    sample = (Sample*)malloc( (int)sizeof(Sample)*total );
+    sendBuffer = (Sample*)malloc(sizeof(Sample)*nSample[myid] );
+    sample = (Sample*)malloc(sizeof(Sample)*total );
 
     n=0;
     nParticle = nSample[myid];
@@ -151,9 +151,9 @@ void determine_partition_code(Sample* sample, int NumPart, int NumThread, double
 
     assert(NumThread >0 || NumPart>NumThread) ;
 
-    task = (pthread_t*) malloc((int)sizeof(pthread_t)*NumThread);
-    sortdata =(TaskSortData*) malloc((int)sizeof(TaskSortData)*NumThread);
-    codelist = (CodeSort*)malloc((int)sizeof(CodeSort)*NumPart);
+    task = (pthread_t*) malloc(sizeof(pthread_t)*NumThread);
+    sortdata =(TaskSortData*) malloc(sizeof(TaskSortData)*NumThread);
+    codelist = (CodeSort*)malloc(sizeof(CodeSort)*NumPart);
 
     for (i=0; i<NumThread; i++) {
         sortdata[i].rank = i;
@@ -200,9 +200,9 @@ void determine_partition_code(Sample* sample, int NumPart, int NumThread, double
 
     /* merge sort */
     if ( 1 < NumThread) {
-        curr = (int*)malloc((int)sizeof(int)*NumThread);
-        lend = (int*)malloc((int)sizeof(int)*NumThread);
-        codebuff = (CodeSort*)malloc((int)sizeof(CodeSort)*NumPart);
+        curr = (int*)malloc(sizeof(int)*NumThread);
+        lend = (int*)malloc(sizeof(int)*NumThread);
+        codebuff = (CodeSort*)malloc(sizeof(CodeSort)*NumPart);
         curr[0] = 0;
         lend[NumThread-1] = NumPart;
         for (i=1; i<NumThread; i++) {
@@ -317,8 +317,8 @@ void coding_domain_particle(Body* part, int NumPart, int NumThread, double box, 
     int myid, i, cnt;
     pthread_t *task;
     TaskCoding *taskcoding;
-    task = (pthread_t*) malloc((int)sizeof(pthread_t)*NumThread);
-    taskcoding = (TaskCoding*)malloc((int)sizeof(TaskCoding)*NumThread);
+    task = (pthread_t*) malloc(sizeof(pthread_t)*NumThread);
+    taskcoding = (TaskCoding*)malloc(sizeof(TaskCoding)*NumThread);
 
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 
@@ -405,8 +405,8 @@ void coding_tagging_domain_particle(Body* part, int NumPart, int NumThread, doub
 
     pthread_t *task;
     TaskCodeTag *taskcodetag;
-    task = (pthread_t*) malloc((int)sizeof(pthread_t)*NumThread);
-    taskcodetag = (TaskCodeTag*)malloc((int)sizeof(TaskCodeTag)*NumThread);
+    task = (pthread_t*) malloc(sizeof(pthread_t)*NumThread);
+    taskcodetag = (TaskCodeTag*)malloc(sizeof(TaskCodeTag)*NumThread);
 
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
@@ -419,7 +419,7 @@ void coding_tagging_domain_particle(Body* part, int NumPart, int NumThread, doub
 
     printf(" myid = %d/%d, nLevel = %d, splitLength =%d, nPart = %ld\n",
            myid, numprocs, nLevel, splitLength, dp->NumPart);
-    split = (code*) malloc( (int) sizeof(code) * splitLength );
+    split = (code*) malloc(sizeof(code) * splitLength );
     for (i=0; i<splitLength; i++) {
         if (i<nSplit)
             split[i] = dp->DomList[i].LowerHilbertKey;
@@ -472,7 +472,7 @@ void partition_sorted_particles(Domain *dp, int NumPart, int NumThread, double b
     int myid, i;
     pthread_t *task;
     TaskPartition *taskpartition;
-    taskpartition=(TaskPartition*)malloc((int)sizeof(TaskPartition)*NumThread);
+    taskpartition=(TaskPartition*)malloc(sizeof(TaskPartition)*NumThread);
 
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
 

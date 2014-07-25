@@ -54,7 +54,7 @@ void read_Particle(Body *pptr, char filename[], int n_start, int n_count)
     fseek(fsnap, disp,0);
     for (n=0; n<n_count; n++)
     {
-        fread(&(pptr[n].vel[0]), sizeof(float), 3, fsnap);
+//        fread(&(pptr[n].vel[0]), sizeof(float), 3, fsnap);
     }
 
     disp   = (2*sizeof(dummy) + sizeof(GadgetHeader));
@@ -170,7 +170,7 @@ Body* load_gadget2_snapshot(char *fname, int files, long int *npart, double *box
         if(i == 0) {
             *npart = NumPart;
             *box = header1.BoxSize;
-            P = (Body*) malloc((int)sizeof(Body)*NumPart);
+            P = (Body*) malloc(sizeof(Body)*NumPart);
             if (P == NULL)
                 exit(0);
         }
@@ -202,7 +202,7 @@ Body* load_gadget2_snapshot(char *fname, int files, long int *npart, double *box
         {
             for(n = 0; n < header1.npart[k]; n++)
             {
-                fread(&P[pc_new].vel[0], sizeof(float), 3, fd);
+//                fread(&P[pc_new].vel[0], sizeof(float), 3, fd);
                 pc_new++;
             }
         }

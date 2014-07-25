@@ -44,7 +44,7 @@ SubCuboid* get_frame_subcuboid(Domain* dp, GlobalParam *gp, int npad, int nbits)
 #endif
     }
 
-    sub = (SubCuboid*) malloc( (int) sizeof(SubCuboid) );
+    sub = (SubCuboid*) malloc( sizeof(SubCuboid) );
     sub->nPadding = npad;
     sub->nBits = nbits;
 
@@ -229,7 +229,7 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
     nSplit = dp->NumDom;
     for (nLevel = 0; nSplit > (1<<nLevel); nLevel++);
     splitLength = 1<<nLevel;
-    code *split = (code*) malloc( (int) sizeof(code) * splitLength );
+    code *split = (code*) malloc( sizeof(code) * splitLength );
 
 //   printf("nSplit = %d nLevel = %d\n", nSplit, nLevel);
     for (i=0; i<splitLength; i++) {

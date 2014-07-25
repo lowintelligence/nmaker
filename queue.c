@@ -36,12 +36,13 @@ int init_queue_pp(PPQ *pq)
 	return 0;
 }
 
-int enqueue_pp(PPQ *pq, Array3 pa, Array3 pb, Array3 pc, int na, int nb)
+int enqueue_pp(PPQ *pq, int ta, int tb, int m)
 {
 	PPelement *pe=pq->elements;
 
 	if (pq->length == pq->size-256)
 	{
+		printf("Enlarge size Q1=%d, TA=%d, TB=%d, head=%d, tail=%d.\n", pq->size, ta, tb, pq->head, pq->tail);
 		pq->size += QUEUE_BLOCK_SIZE;
 		pq->elements = (PPelement*)realloc(pq->elements, pq->size*sizeof(PPelement));
 		pe = pq->elements;
@@ -50,12 +51,11 @@ int enqueue_pp(PPQ *pq, Array3 pa, Array3 pb, Array3 pc, int na, int nb)
 			memcpy((void*)pe+pq->size-QUEUE_BLOCK_SIZE, (void*)pe, sizeof(PPelement)*pq->tail);
 			pq->tail=pq->head+pq->length;
 		}
+		printf("Enlarge size Q2=%d, TA=%d, TB=%d, head=%d, tail=%d.\n", pq->size, ta, tb, pq->head, pq->tail);
 	}
-	pe[pq->tail].A = pa;
-	pe[pq->tail].B = pb;
-	pe[pq->tail].C = pc;
-	pe[pq->tail].nA = na;
-	pe[pq->tail].nB = nb;
+	pe[pq->tail].TA = ta;
+	pe[pq->tail].TB = tb;
+	pe[pq->tail].mask = m;
 	pq->tail = (pq->tail+1)%pq->size;
 	pq->length++;
 	return 0;
@@ -67,11 +67,9 @@ int dequeue_pp(PPQ *pq, PPelement *peout)
 
 	if (pq->length>0)
 	{
-		peout->A = pe->A;
-		peout->B = pe->B;
-		peout->C = pe->C;
-		peout->nA = pe->nA;
-		peout->nB = pe->nB;
+		peout->TA = pe->TA;
+		peout->TB = pe->TB;
+		peout->mask = pe->mask;
 		pq->head = (pq->head+1)%pq->size;
 		pq->length--;
 		return 0;
@@ -166,14 +164,10 @@ int destroy_queue_tw(TWQ *pq)
 }
 
 
-Array3 packarray3(Body* pp, int n)
+packarray3(Body* pp, int n, Array3 pa)
 {
 	int i;
-	Array3 pa;
 //	pa.x = pa.y = pa.z = NULL;
-	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*n);
-	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*n);
-	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*n);
 	if(pp)
 	{
 		for (i=0;i<n;i++)
@@ -192,53 +186,40 @@ Array3 packarray3(Body* pp, int n)
 			pa.z[i] = 0;
 		}
 	}
-
-	return pa;
 }
 
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask)
 {
-	Array3 pA, pB, pC;
+	enqueue_pp(PQ_ppnode, TA, TB, mask);
+}
+
+int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC)
+{
+	PPelement el;
 	int nA, nB;
 
-	nA = tree[TA].nPart;
-	pA = packarray3(&part[tree[TA].firstpart], nA);
-	pC = packarray3(NULL, nA);
+	dequeue_pp(PQ_ppnode, &el);
+//	printf("length=%d, TA=%d, nA=%d, TB=%d, nB=%d, %.2f\n", PQ_ppnode->length, el.TA, tree[el.TA].nPart, el.TB, tree[el.TB].nPart, pC.x[0]);
+//	sleep(3);
 
-	if (mask == 0)
+	nA = tree[el.TA].nPart;
+	packarray3(&part[tree[el.TA].firstpart], nA, pA);
+	packarray3(NULL, nA, pC);
+
+	if (el.mask == 0)
 	{
-		nB = tree[TB].nPart;
-		pB = packarray3(&part[tree[TB].firstpart], nB);
+		nB = tree[el.TB].nPart;
+		packarray3(&part[tree[el.TB].firstpart], nB, pB);
 	}
 	else
 	{
 		nB = 1;
-		pB.x = (PRECTYPE*)malloc(sizeof(PRECTYPE));
-		pB.y = (PRECTYPE*)malloc(sizeof(PRECTYPE));
-		pB.z = (PRECTYPE*)malloc(sizeof(PRECTYPE));
-		pB.x[0] = tree[TB].masscenter[0];
-		pB.y[0] = tree[TB].masscenter[1];
-		pB.z[0] = tree[TB].masscenter[2];
+		pB.x[0] = tree[el.TB].masscenter[0];
+		pB.y[0] = tree[el.TB].masscenter[1];
+		pB.z[0] = tree[el.TB].masscenter[2];
 //		pB.x=pB.y=pB.z=NULL;	
 	}
-	enqueue_pp(PQ_ppnode, pA, pB, pC, nA, nB);
-}
-
-int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3))
-{
-	PPelement el;
-	dequeue_pp(PQ_ppnode, &el);
-//	printf("p");
-	process(el.A, el.nA, el.B, el.nB, EPS2, el.C);
-	free(el.A.x);
-	free(el.A.y);
-	free(el.A.z);
-	free(el.B.x);
-	free(el.B.y);
-	free(el.B.z);
-	free(el.C.x);
-	free(el.C.y);
-	free(el.C.z);
+	process(pA, nA, pB, nB, EPS2, pC);
 }
 
 int EnqueueP_Cell(TWQ *PQ_treewalk, int TA, int TB, double theta)

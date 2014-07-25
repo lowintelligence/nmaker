@@ -8,6 +8,7 @@
 #include "snapshot.h"
 #include "domain.h"
 #include "partmesh.h"
+#include "dtime.h"
 
 #endif /* DRIVER_H */
 

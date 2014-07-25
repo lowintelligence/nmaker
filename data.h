@@ -40,8 +40,8 @@ typedef struct {
     int group; // comes from cuboid
     /*    real phi; // gravitional potential, which is optional. */
     vect3d pos; // position of particle
-    vect3d vel; // velocity of particle
-    vect3d acc; // acceration of particle
+//    vect3d vel; // velocity of particle
+//    vect3d acc; // acceration of particle
     real  mass;
 } Body;  // Body of N-Body, You knew it.
 

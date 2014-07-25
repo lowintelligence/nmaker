@@ -66,24 +66,33 @@ void bucketsort(Body* part,int numparts,int* numparticles,int* partidxes,int Ngr
 	m=0;
 	for(i=0;i<Ngrid;i++){
 		ppart[i]=-1;
+		partidxes[i]=-1;	
 		if(numparticles[i]==0)
 			continue;
 		partidxes[i]=m;	
 		ppart[i]=m;
 		m+=numparticles[i];
 	}
+//	printf("540: partidx %d, ppart %d, numpart %d.\n", partidxes[540], ppart[540], numparticles[540]);
 
 	for(i=0;i<numparts;i++){
 		int meshid=part[i].group;
+		m = partidxes[meshid];
 		j=ppart[meshid];//current pointer for each mesh	
-		ppart[meshid]++;	
-		if(i==j)
+		if(j>=numparts)
+		{
+			printf("Part %d, ppart %d, group %d, meshid %d, meshnum %d, partidx %d.\n", i, ppart[meshid], part[i].group, meshid, numparticles[meshid], partidxes[meshid]);
+		}
+		if(meshid==540 && ppart[meshid]%100000==0) printf("i=%d, gi=%d, j=%d, gj=%d, ppart=%d\n ", i, part[i].group, j, part[j].group, ppart[meshid]);
+		if(i>=m && i<m+numparticles[meshid])
 			continue;
 		else
+		{
 			exchange(part,i,j);
+			ppart[meshid]++;	
+		}
 	}
-
-		
+	free(ppart);		
 }
 
 void mortonSort(Body* part,int numparts,int Bits){
@@ -91,9 +100,11 @@ void mortonSort(Body* part,int numparts,int Bits){
 	int ngrids=1<<Bits;
 	ngrids=ngrids*ngrids*ngrids;
 	int* pparti=(int*)malloc(sizeof(int)*ngrids);
+	int* ppartj=(int*)malloc(sizeof(int)*ngrids);
 	int* numpartis=(int*)malloc(sizeof(int)*ngrids);
 	for(i=0;i<ngrids;i++){
 		pparti[i]=-1;
+		ppartj[i]=-1;
 		numpartis[i]=0;
 	}
 	for(i=0;i<numparts;i++){
@@ -105,17 +116,21 @@ void mortonSort(Body* part,int numparts,int Bits){
 		if(numpartis[i]==0)
 			continue;
 		pparti[i]=m;
+		ppartj[i]=m;
 		m+=numpartis[i];
 	}
 
 	for(i=0;i<numparts;i++){
 		int mtid=part[i].mortonkey;
+		m=ppartj[mtid];
 		j=pparti[mtid];//current pointer for each mesh	
-		pparti[mtid]++;	
-		if(i==j)
+		if(i>=m && i<m+numpartis[mtid])
 			continue;
 		else
+		{
 			exchange(part,i,j);
+			pparti[mtid]++;	
+		}
 	}
 
 	free(pparti);	
@@ -154,7 +169,7 @@ void free_domaintree(DomainTree *dtp)
     }
 }
 
-
+/*  
 void insert_particle_into_tree(vect3d center, double size, int iNode,int iPart, int first, int *plast)
 {
     int d, index, old, num;
@@ -189,7 +204,7 @@ void insert_particle_into_tree(vect3d center, double size, int iNode,int iPart, 
     // this is a node
     insert_particle_into_tree(center, size/2, tree[iNode].sub[index], iPart, first, plast);
 }
-
+*/
 
 typedef struct {
     int rank;
@@ -407,12 +422,12 @@ void* mt_build_subtree_morton(void *param) {
 			if (lpmask < mpart) mpart = lpmask;
 			level++;
 		}
-		printf("[%d] mesh %d finished, level=%d.\n", rank, m, level);
+		//printf("[%d] mesh %d finished, level=%d.\n", rank, m, level);
 	}
-		printf("mengchen qsort=%lf\n", mengchen/CLOCKS_PER_SEC);
+	printf("mengchen qsort=%lf\n", mengchen/CLOCKS_PER_SEC);
 }
 
-
+/*  
 void* mt_build_subtree(void *param) {
     int n, x, y, z, idx;
     int lower, upper, rank, domainpart;
@@ -447,7 +462,7 @@ void* mt_build_subtree(void *param) {
 		Body temp;
 		temp.group=part[10].group;
 		part[10].group=part[domainpart-1].group;
-		part[domainpart-1].group=temp.group;*/
+		part[domainpart-1].group=temp.group;##/
     for (n=0; n<domainpart; n++) {
         if ( last-first>=length ) {
             printf("error\n");
@@ -458,7 +473,7 @@ void* mt_build_subtree(void *param) {
 /*            if(mybool==1){
 				printf("shock!\n");
 				mybool=0;
-			}*/
+			}##/
 			x = (int) ( part[n].pos[0] * nbox_boxsize );
             y = (int) ( part[n].pos[1] * nbox_boxsize );
             z = (int) ( part[n].pos[2] * nbox_boxsize );
@@ -473,11 +488,11 @@ void* mt_build_subtree(void *param) {
 
         }
 /*		else
-			mybool=1;*/
+			mybool=1;##/
     }
     printf(" (%d) first = %d , last = %d, frac=%.3f\n",rank, first, last, (double)(last-first)/length);
 
-}
+}*/
 
 
 void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
@@ -539,8 +554,9 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
 
     for (n=0; n<node_length; n++) {
         dtp->tree[n].nPart = 0;
-        for (d=0; d<8; d++)
-            dtp->tree[n].sub[d] = -1; //children is Null
+        dtp->tree[n].childnum = 0;
+        dtp->tree[n].firstchild = -1;
+        dtp->tree[n].firstpart = -1;
     }
 //    dtp->tree -= first_node ;
     tree = (dtp->tree );
@@ -585,7 +601,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
   
 //  clock_t time_start,time_end;
 //  time_start=clock();
-   
+//    printf("[] Before bucket sort for mesh.\n");
 	bucketsort(part,dp->NumPart,dtp->numparticles,dtp->partidxes,Ngrid);//bucketsort by the mesh index. And get numparticles and partidxes.
   
 //  time_end=clock();
@@ -644,7 +660,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
 
         first_node +=  buildsub[q].length ;
     }
-printf("Before\n");
+	printf("Before subtree pthread\n");
     for (q=0; q<nThread; q++) {
         pthread_create(&task[q], NULL, mt_build_subtree_morton, &buildsub[q]);
     }
@@ -652,7 +668,7 @@ printf("Before\n");
     for (q=0; q<nThread; q++) {
         pthread_join(task[q], NULL);
     }
-printf("After\n");
+	printf("After subtree pthread\n");
 	free(lower);
     free(upper);
     free(npart);

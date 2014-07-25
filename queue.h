@@ -31,15 +31,13 @@
 #include "subcuboid.h"
 #include "ppkernel.h"
 
-#define QUEUE_BLOCK_SIZE 1048576
+#define QUEUE_BLOCK_SIZE 8388068
 
 typedef struct
 {
-	Array3 A;
-	Array3 B;
-	Array3 C;
-	int nA;
-	int nB;	
+	int TA;
+	int TB;
+	int mask;
 } PPelement;
 
 typedef struct
@@ -53,14 +51,14 @@ typedef struct
 
 int init_queue_pp(PPQ *pq);
 
-int enqueue_pp(PPQ *pq, Array3 pa, Array3 pb, Array3 pc, int na, int nb);
+int enqueue_pp(PPQ *pq, int ta, int tb, int m);
 
 int dequeue_pp(PPQ *pq, PPelement *peout);
 
 int destroy_queue_pp(PPQ *pq);
 
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask);
-int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3));
+int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC);
 
 typedef struct
 {

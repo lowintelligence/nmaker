@@ -15,13 +15,13 @@ void load_particle_into_domain(Domain* dp, int myid, int numprocs) {
     char fname[80]="/home/qwang/data/z0_256_100mpch/snapshot256_100mpch_z0.dat";
 
     dp->NumPart = n_count;
-    dp->Part = (Body*) malloc((int)sizeof(Body)*(n_count) );
+    dp->Part = (Body*) malloc(sizeof(Body)*(n_count) );
 
     read_Particle(dp->Part , fname, n_start, n_count);
 //   printf(" [%d/%d] %15ld %15ld \n", myid, numprocs, n_start, n_count);
 
     dp->NumDom = numprocs;
-    dp->DomList = (DomainInfo*)malloc( (int)sizeof(DomainInfo)*(dp->NumDom) );
+    dp->DomList = (DomainInfo*)malloc(sizeof(DomainInfo)*(dp->NumDom) );
 
 //    printf("%lf %lf %lf\n", dp->Part[0].pos[0], dp->Part[0].pos[1], dp->Part[0].pos[2]);
 //    printf("%lf %lf %lf\n", dp->Part[n_count-1].pos[0], dp->Part[n_count-1].pos[1], dp->Part[n_count-1].pos[2]);
@@ -54,7 +54,7 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
 //    char fname[80]="/home/qwang/data/z0_256_100mpch/snapshot256_100mpch_z0.dat";
 
     dp->NumPart = n_count;
-    dp->Part = (Body*) malloc((int)sizeof(Body)*(n_count) );
+    dp->Part = (Body*) malloc(sizeof(Body)*(n_count) );
     srand48(8888*myid);
 	int velocity=5000;
     for (n=0; n<n_count; n++)
@@ -62,9 +62,9 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
 		dp->Part[n].pos[0]=drand48()*gp->BoxSize;
 		dp->Part[n].pos[1]=drand48()*gp->BoxSize;
 		dp->Part[n].pos[2]=drand48()*gp->BoxSize;
-		dp->Part[n].vel[0]=drand48()*velocity;
-		dp->Part[n].vel[1]=drand48()*velocity;
-		dp->Part[n].vel[2]=drand48()*velocity;
+//		dp->Part[n].vel[0]=drand48()*velocity;
+//		dp->Part[n].vel[1]=drand48()*velocity;
+//		dp->Part[n].vel[2]=drand48()*velocity;
 		dp->Part[n].ID=n_start+n+1;
     }
 //    read_Particle(dp->Part , fname, n_start, n_count);
@@ -72,7 +72,7 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
    printf(" [%d/%d] %15ld %15ld \n", myid, numprocs, n_start, n_count);
 
     dp->NumDom = numprocs;
-    dp->DomList = (DomainInfo*)malloc( (int)sizeof(DomainInfo)*(dp->NumDom) );
+    dp->DomList = (DomainInfo*)malloc(sizeof(DomainInfo)*(dp->NumDom) );
 
 //    printf("%lf %lf %lf\n", dp->Part[0].pos[0], dp->Part[0].pos[1], dp->Part[0].pos[2]);
 //    printf("%lf %lf %lf\n", dp->Part[n_count-1].pos[0], dp->Part[n_count-1].pos[1], dp->Part[n_count-1].pos[2]);
