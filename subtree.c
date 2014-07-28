@@ -1,4 +1,5 @@
 #include "subtree.h"
+#include "dtime.h"
 #include <assert.h>
 
 static Body *part;
@@ -23,6 +24,56 @@ typedef struct {
     int **buff; // need to count the number of particle to the other domain.
 } ExchangeFrontier;
 
+void check_subtree(Domain *dp)
+{
+	DomainTree *dtp=dp->domtree;
+
+	long int In, Jn, Kn, Ngrid;
+	long int i, j, k;
+	long int incorrect;
+	long int n;
+
+	In = dp->cuboid->nSide[0];
+	Jn = dp->cuboid->nSide[1];
+	Kn = dp->cuboid->nSide[2];
+
+	Ngrid = In*Jn*Kn;
+	incorrect = 0;
+	n = 0;
+	// Check mesh particles.
+	for (i=0; i<Ngrid; i++)
+	{
+		if (dtp->numparticles[i]==0)
+		{
+			if(dtp->partidxes[i]!=-1)
+			{
+				incorrect += 0x1;
+			}
+			continue;
+		}
+		if (dtp->partidxes[i]!=n)
+		{
+			incorrect += 0x100;
+		}
+		if (part[n].group!=i)
+		{
+			incorrect += 0x10000;
+		}
+		long ncount = 0;
+		for(; n<dp->NumPart && part[n].group==i; n++)
+		{
+			ncount ++;
+		}
+		if (ncount != dtp->numparticles[i])
+		{
+			incorrect += 0x1000000;
+		}
+	}
+	
+	// Check subtrees.
+	//
+	printf("Check subtree, %ld/%ld meshes, %ld/%d particles, incorrect code = %ld.\n", i, n, Ngrid, dp->NumPart, incorrect);
+}
 
 int mortonEncode(float x,float y,float z,double meshsize){
 	int xi,yi,zi,X,Y,Z,code;
@@ -284,7 +335,7 @@ void* mt_build_subtree_morton(void *param) {
 	numpart = taskp->numparticles; 
 	size = taskp->box/(1<<(taskp->level));
 	double mengchen=0;
-  clock_t time_start,time_end;
+    double time_start,time_end;
 		
 	for (m=first; m<last; m++)
 	{
@@ -292,16 +343,25 @@ void* mt_build_subtree_morton(void *param) {
 		int mpart = numpart[m];
 		Node *pnode, *prnode;
 	//!Meng
-	    for(n=0;n<mpart;n++)
+		for(n=0;n<mpart;n++)
 			part[ipart+n].mortonkey=mortonEncode(part[ipart+n].pos[0],part[ipart+n].pos[1],part[ipart+n].pos[2],size);
-	
-  time_start=clock();
-  if(MAX_MORTON_LEVEL>5)
-		qsort(part+ipart,mpart,sizeof(Body),CompKey);
-  else
-		mortonSort(part+ipart,mpart,MAX_MORTON_LEVEL);
-  time_end=clock();
-  mengchen+=(double)(time_end-time_start);
+
+		time_start=dtime();
+		//  if(MAX_MORTON_LEVEL>5)
+		if(mpart<(1<<(MAX_MORTON_LEVEL*2+4)))  
+		{
+			qsort(part+ipart,mpart,sizeof(Body),CompKey);
+			time_end=dtime();
+			mengchen+=(double)(time_end-time_start);
+//			printf("[%d] qsort %d of %d particles finished, time=%.4f.\n", rank, m, mpart, time_end-time_start);
+		}
+		else
+		{
+			mortonSort(part+ipart,mpart,MAX_MORTON_LEVEL);
+			time_end=dtime();
+			mengchen+=(double)(time_end-time_start);
+//			printf("[%d] bsort %d of %d particles finished, time=%.4f.\n", rank, m, mpart, time_end-time_start);
+		}
 
 		float sumcenterx, sumcentery, sumcenterz, invnpart;
 
@@ -458,9 +518,9 @@ void* mt_build_subtree_morton(void *param) {
 			if (lpmask < mpart) mpart = lpmask;
 			level++;
 		}
-		//printf("[%d] mesh %d finished, level=%d.\n", rank, m, level);
+		printf("[%d] mesh %d finished, level=%d.\n", rank, m, level);
 	}
-	printf("mengchen qsort=%lf\n", mengchen/CLOCKS_PER_SEC);
+	printf("mengchen qsort=%.4f\n", mengchen);
 }
 
 /*  
@@ -712,4 +772,5 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
     free(task);
     free(buildsub);
 
+	check_subtree(dp);
 }
