@@ -58,6 +58,8 @@ void exchange(Body* part,int i,int j){
 
 void bucketsort(Body* part,int numparts,int* numparticles,int* partidxes,int Ngrid){
 	int i,j,k,m;
+	Body temp,temp1;
+	int meshid;
 	int* ppart=(int*)malloc(sizeof(int)*Ngrid);
 	for(i=0;i<numparts;i++){
 		numparticles[part[i].group]++;	
@@ -75,21 +77,37 @@ void bucketsort(Body* part,int numparts,int* numparticles,int* partidxes,int Ngr
 	}
 //	printf("540: partidx %d, ppart %d, numpart %d.\n", partidxes[540], ppart[540], numparticles[540]);
 
-	for(i=0;i<numparts;i++){
-		int meshid=part[i].group;
-		m = partidxes[meshid];
-		j=ppart[meshid];//current pointer for each mesh	
+	for(i=0;i<numparts;){
+		meshid=part[i].group;
+		
 		if(j>=numparts)
 		{
 			printf("Part %d, ppart %d, group %d, meshid %d, meshnum %d, partidx %d.\n", i, ppart[meshid], part[i].group, meshid, numparticles[meshid], partidxes[meshid]);
 		}
 		if(meshid==540 && ppart[meshid]%100000==0) printf("i=%d, gi=%d, j=%d, gj=%d, ppart=%d\n ", i, part[i].group, j, part[j].group, ppart[meshid]);
-		if(i>=m && i<m+numparticles[meshid])
-			continue;
+	
+		if(i>=partidxes[meshid] && i<numparticles[meshid]+partidxes[meshid]){
+			i++;
+		}
 		else
 		{
-			exchange(part,i,j);
+			j=ppart[meshid];//current pointer for each mesh	
+			temp=part[j];
+			part[j]=part[i];
 			ppart[meshid]++;	
+			while(1){
+				meshid=temp.group;
+				if(i>=partidxes[meshid] && i<partidxes[meshid]+numparticles[meshid]){
+						part[i]=temp;
+						i++;
+						break;
+					}
+				j=ppart[meshid];
+				temp1=part[j];
+				ppart[meshid]++;
+				part[j]=temp;
+				temp=temp1;
+			}
 		}
 	}
 	free(ppart);		
@@ -97,6 +115,7 @@ void bucketsort(Body* part,int numparts,int* numparticles,int* partidxes,int Ngr
 
 void mortonSort(Body* part,int numparts,int Bits){
 	int i,j,k,m;
+	Body temp,temp1;
 	int ngrids=1<<Bits;
 	ngrids=ngrids*ngrids*ngrids;
 	int* pparti=(int*)malloc(sizeof(int)*ngrids);
@@ -120,20 +139,37 @@ void mortonSort(Body* part,int numparts,int Bits){
 		m+=numpartis[i];
 	}
 
-	for(i=0;i<numparts;i++){
+	for(i=0;i<numparts;){
 		int mtid=part[i].mortonkey;
 		m=ppartj[mtid];
-		j=pparti[mtid];//current pointer for each mesh	
-		if(i>=m && i<m+numpartis[mtid])
+		if(i>=m && i<m+numpartis[mtid]){
+			i++;
 			continue;
+		}
 		else
 		{
-			exchange(part,i,j);
+			j=pparti[mtid];//current pointer for each mesh	
+			temp=part[j];
+			part[j]=part[i];
 			pparti[mtid]++;	
+			while(1){
+				mtid=temp.mortonkey;
+				if(i>=ppartj[mtid] && i<ppartj[mtid]+numpartis[mtid]){
+						part[i]=temp;
+						i++;
+						break;
+					}
+				j=pparti[mtid];
+				temp1=part[j];
+				pparti[mtid]++;
+				part[j]=temp;
+				temp=temp1;
+			}
 		}
 	}
 
 	free(pparti);	
+	free(ppartj);	
 	free(numpartis);	
 }
 
@@ -599,13 +635,13 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
 		dtp->numparticles[m]=0;
 	}
   
-//  clock_t time_start,time_end;
-//  time_start=clock();
-//    printf("[] Before bucket sort for mesh.\n");
+  clock_t time_start,time_end;
+  time_start=clock();
+    printf("[] Before bucket sort for mesh.\n");
 	bucketsort(part,dp->NumPart,dtp->numparticles,dtp->partidxes,Ngrid);//bucketsort by the mesh index. And get numparticles and partidxes.
   
-//  time_end=clock();
-//  printf("time bucketsort:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
+  time_end=clock();
+  printf("time bucketsort:%lf\n",(double)(time_end-time_start)/CLOCKS_PER_SEC);
 //  sleep(10);	
 	printf("tree1\n");
 
