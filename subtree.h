@@ -7,7 +7,7 @@
 
 #define MAX_MORTON_LEVEL 6
 #define MIN_TREE_LEVEL 1
-#define MAX_PACKAGE_SIZE 4096
+#define MAX_PACKAGE_SIZE 2048
 
 void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread);
 

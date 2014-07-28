@@ -60,8 +60,8 @@ typedef struct {
 // We now have continous memory local trees!
 typedef struct {
 	int nPart;
-	int firstpart; // index of particle.
-	int firstchild; // index of the first child according to big node array.
+	long int firstpart; // index of particle.
+	long int firstchild; // index of the first child according to big node array.
 	int childnum;
 	int level;
 	int mortonkey;

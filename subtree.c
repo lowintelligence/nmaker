@@ -6,7 +6,7 @@ static Body *part;
 static Node *tree;
 
 
-static double frac_part_node = 0.5;
+static int factor_part_node= 2;
 // new space to build tree as a uint to sent to the other domain or node
 // build top-subtree
 // the tree must be smoothed during tree-traveral
@@ -40,39 +40,122 @@ void check_subtree(Domain *dp)
 	Ngrid = In*Jn*Kn;
 	incorrect = 0;
 	n = 0;
-	// Check mesh particles.
 	for (i=0; i<Ngrid; i++)
 	{
+		int rooti = dtp->root_cell[i];
+
+		// Check empty mesh.
 		if (dtp->numparticles[i]==0)
 		{
 			if(dtp->partidxes[i]!=-1)
 			{
 				incorrect += 0x1;
 			}
+
+			if(tree[rooti].nPart!=0 || tree[rooti].childnum!=0 || tree[rooti].firstchild!=-1 || tree[rooti].firstpart!=-1)
+			{
+				incorrect += 0x100000000L;
+			}
+
 			continue;
 		}
-		if (dtp->partidxes[i]!=n)
+
+		// Check first particle position.
+		if (dtp->partidxes[i]!=n || dtp->partidxes[i]!=tree[rooti].firstpart)
 		{
-			incorrect += 0x100;
+			incorrect += 0x100L;
+//			printf("i=%ld, partindex=%ld, numpart=%ld, treefirstpart=%ld.\n", i, dtp->partidxes[i],  dtp->numparticles[i], tree[rooti].firstpart);
 		}
+
+		// Check the mesh group id.
 		if (part[n].group!=i)
 		{
 			incorrect += 0x10000;
 		}
+
+		// Check the particle number.
 		long ncount = 0;
 		for(; n<dp->NumPart && part[n].group==i; n++)
 		{
 			ncount ++;
 		}
-		if (ncount != dtp->numparticles[i])
+		if (ncount != dtp->numparticles[i] || tree[rooti].nPart != dtp->numparticles[i])
 		{
-			incorrect += 0x1000000;
+			incorrect += 0x1000000L;
+		}
+
+		// Check subtree.
+		// Broad travel.
+		int js=tree[rooti].firstchild;
+		if(rooti!=js-1)
+		{
+			incorrect += 0x10000000000L;
+//			printf("i=%ld, numparts=%ld, root_cell=%ld, rpart=%ld, firstchild=%ld, childpart=%ld.\n", i, dtp->numparticles[i],  dtp->root_cell[i], tree[dtp->root_cell[i]].firstpart, tree[rooti].firstchild, tree[tree[rooti].firstchild].firstpart);
+		}
+		int je=tree[rooti].firstchild+tree[rooti].childnum;
+		int level=1;
+		int j;
+		int skipnp=0;
+		int firstnl=js; // First tree node of next level.
+		while (firstnl!=-1 && level<=MAX_MORTON_LEVEL)
+		{
+			int numnl = 0; // Next level tree nodes.
+			int numl = skipnp; // This level particles in the tree.
+			firstnl = -1; 
+			if(tree[js-1].level!=level-1)
+			{
+				incorrect += 0x10000000000L;
+			}
+			for (j=js; j<je; j++)
+			{
+				if(tree[j].level!=level)
+				{
+					incorrect += 0x10000000000L;
+//					printf("i=%ld, j=%ld, je=%ld, js=%ld, root=%ld, rnumchild=%d, rnump=%d, rp=%d, ilevel=%ld, jlevel=%ld, jnpart=%d, jp=%d, meshnp=%d, meshp=%d.\n", i, j, je, js, rooti, tree[rooti].childnum, tree[rooti].nPart, tree[rooti].firstpart, level, tree[j].level, tree[j].nPart, tree[j].firstpart, dtp->numparticles[i], dtp->partidxes[i]);
+				}
+				if(tree[j].nPart==0)
+				{
+					incorrect += 0x1000000L;
+				}
+				numl+=tree[j].nPart;
+				if(tree[j].firstpart<dtp->partidxes[i] || tree[j].firstpart+tree[j].nPart>dtp->partidxes[i]+dtp->numparticles[i]) // Particle pointer error.
+				{
+//					printf("i=%ld, j=%ld, je=%ld, js=%ld, ilevel=%d, jlevel=%d, jnpart=%d, jp=%d, meshnp=%d, meshp=%d.\n", i, j, je, js, level, tree[j].level, tree[j].nPart, tree[j].firstpart, dtp->numparticles[i], dtp->partidxes[i]);
+					sleep(1);
+					incorrect += 0x100;
+				}
+				if(tree[j].childnum>0)
+				{
+					numnl+=tree[j].childnum;
+					if(firstnl==-1) firstnl = tree[j].firstchild;
+				}
+				else
+				{
+					skipnp+=tree[j].nPart;
+				}
+			}
+			if(numl!=dtp->numparticles[i])
+			{
+				incorrect += 0x1000000L;
+			}
+			if(firstnl!=-1)
+			{
+				if(j!=firstnl)
+				{
+					incorrect += 0x10000000000L;
+				}
+				js = firstnl;
+				je = firstnl+numnl;
+			}
+			level++;
+		}
+		if(firstnl!=-1 || (i<Ngrid-1 && j>(dtp->root_cell[i+1])))
+		{
+			incorrect += 0x1000000000000L;
 		}
 	}
 	
-	// Check subtrees.
-	//
-	printf("Check subtree, %ld/%ld meshes, %ld/%d particles, incorrect code = %ld.\n", i, n, Ngrid, dp->NumPart, incorrect);
+	printf("Check subtree, %ld/%ld meshes, %ld/%d particles, incorrect code = %lx.\n", i, Ngrid, n, dp->NumPart, incorrect);
 }
 
 int mortonEncode(float x,float y,float z,double meshsize){
@@ -232,7 +315,7 @@ void packing_group(Domain *dp) {
 	int i;
 	float j,k;
 	Node* ptree=tree;
-	int node_length=(dp->NumPart)*frac_part_node;
+	int node_length=(dp->NumPart)/factor_part_node+1<<(MIN_TREE_LEVEL*3)+1;
 	for(i=dp->NumPart;i<node_length+dp->NumPart;i++)
 		if(tree[i].nPart==2){
 			//printf("center=%lf,%lfd,%lf,width=%f,npart=%d\n",tree[i].masscenter[0],tree[i].masscenter[1],tree[i].masscenter[2],tree[i].width,tree[i].nPart);
@@ -501,9 +584,9 @@ void* mt_build_subtree_morton(void *param) {
 						if (n>=mpart) break;
 						n = prnode->firstpart - ipart;
 						curcode = part[ipart+n].mortonkey >> levelshift;
+						prnode->firstchild = pnode - tree;
 					}	
 						
-					prnode->firstchild = pnode - tree;
 					prnode->childnum++;
 					pnode->level = level;
 					pnode->mortonkey = curcode << levelshift;
@@ -518,7 +601,7 @@ void* mt_build_subtree_morton(void *param) {
 			if (lpmask < mpart) mpart = lpmask;
 			level++;
 		}
-		printf("[%d] mesh %d finished, level=%d.\n", rank, m, level);
+//		printf("[%d] mesh %d finished, level=%d.\n", rank, m, level);
 	}
 	printf("mengchen qsort=%.4f\n", mengchen);
 }
@@ -614,7 +697,6 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
     npart = (int*)malloc(sizeof(int)*nThread);
 
     lower[0] = 0;
-    upper[nThread-1]=Ngrid;
 
     for (m=1, n=0; n<Ngrid; n++) {
         if ( accum[n] > m*accum_thread ) {
@@ -622,6 +704,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
             m++;
         }
     }
+    upper[nThread-1]=Ngrid;
 
     npart[0] = accum[upper[0]-1];
     for (m=1; m<nThread; m++) {
@@ -644,7 +727,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
     dtp->root_cell = (int*)malloc(sizeof(int)*index_length );
 
     /* allocate space for subtree */
-    node_length = (int) ( (dp->NumPart) * frac_part_node + index_length);
+    node_length = (int) ( (dp->NumPart) / factor_part_node + index_length*((1<<(MIN_TREE_LEVEL*3) + 1)));
 
     dtp->tree = (Node*)malloc(sizeof(Node)*node_length);
 
@@ -717,7 +800,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
 	
 	dtp->root_cell[0] = 0;
     for (i=1; i<Ngrid; i++){ 
-        dtp->root_cell[i] = dtp->root_cell[i-1]+dtp->numparticles[i-1]*frac_part_node+1;
+        dtp->root_cell[i] = dtp->root_cell[i-1]+dtp->numparticles[i-1]/factor_part_node+(1<<(MIN_TREE_LEVEL*3))+1;
 	}
 
 /*	printf("nSide=%d,%d,%d",dp->cuboid->nSide[0],dp->cuboid->nSide[1],dp->cuboid->nSide[2]);
@@ -741,7 +824,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
         buildsub[q].upper = upper[q];
         buildsub[q].npart = npart[q];
         buildsub[q].first = first_node ;
-        buildsub[q].length= (int) ( npart[q] * frac_part_node );//node_length
+        buildsub[q].length= (int) ( (dp->NumPart) / factor_part_node + index_length*((1<<(MIN_TREE_LEVEL*3) + 1)));//node_length
         buildsub[q].totpart = dp->NumPart;
 //        buildsub[q].tree  = &(dtp->tree[q]);
         buildsub[q].root_cell = dtp->root_cell; //???

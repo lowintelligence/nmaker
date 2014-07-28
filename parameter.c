@@ -40,7 +40,7 @@ void setup_parameters_numproc(GlobalParam* gp) {
 
 
 
-    gp->PartBits = gp->NumBits + 5 ;
+    gp->PartBits = gp->NumBits + 4 ;
     gp->NumGridPerSide = 1<<gp->NumBits;//128;
     parl =(1<<gp->PartBits);//2048*2048*2048;
     gp->TotNumPart =parl*parl*parl;//2048*2048*2048;
