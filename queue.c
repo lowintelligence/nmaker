@@ -16,6 +16,7 @@
  * =====================================================================================
  */
 #include "queue.h"
+#include <assert.h>
 
 static Body* part;
 static Node* tree;
@@ -42,16 +43,24 @@ int enqueue_pp(PPQ *pq, int ta, int tb, int m)
 
 	if (pq->length == pq->size-256)
 	{
-		printf("Enlarge size Q1=%d, TA=%d, TB=%d, head=%d, tail=%d.\n", pq->size, ta, tb, pq->head, pq->tail);
+		printf("Enlarge Q1 s=%d, l=%d, TA=%d, TB=%d, hd=%d, tl=%d.\n", pq->size, pq->length, ta, tb, pq->head, pq->tail);
 		pq->size += QUEUE_BLOCK_SIZE;
 		pq->elements = (PPelement*)realloc(pq->elements, pq->size*sizeof(PPelement));
 		pe = pq->elements;
 		if (pq->tail < pq->head)
 		{
-			memcpy((void*)pe+pq->size-QUEUE_BLOCK_SIZE, (void*)pe, sizeof(PPelement)*pq->tail);
-			pq->tail=pq->head+pq->length;
+			if (pq->tail>QUEUE_BLOCK_SIZE)
+			{
+				memcpy((void*)(pe+pq->size-QUEUE_BLOCK_SIZE), (void*)pe, sizeof(PPelement)*QUEUE_BLOCK_SIZE);
+				memcpy((void*)pe, (void*)(pe+QUEUE_BLOCK_SIZE), sizeof(PPelement)*(pq->tail-QUEUE_BLOCK_SIZE));
+			}
+			else
+			{
+				memcpy((void*)(pe+pq->size-QUEUE_BLOCK_SIZE), (void*)pe, sizeof(PPelement)*pq->tail);
+			}
+			pq->tail=(pq->head+pq->length)%pq->size;
 		}
-		printf("Enlarge size Q2=%d, TA=%d, TB=%d, head=%d, tail=%d.\n", pq->size, ta, tb, pq->head, pq->tail);
+		printf("Enlarge Q2 s=%d, l=%d, TA=%d, TB=%d, hd=%d, tl=%d.\n", pq->size, pq->length, ta, tb, pq->head, pq->tail);
 	}
 	pe[pq->tail].TA = ta;
 	pe[pq->tail].TB = tb;
@@ -72,6 +81,11 @@ int dequeue_pp(PPQ *pq, PPelement *peout)
 		peout->mask = pe->mask;
 		pq->head = (pq->head+1)%pq->size;
 		pq->length--;
+
+		if(pq->length%300000==0)
+		{
+			printf("l=%d, TA=%d, nA=%d, TB=%d, nB=%d, mask=%d.\n", pq->length, peout->TA, tree[peout->TA].nPart, peout->TB, tree[peout->TB].nPart, peout->mask);
+		}
 		return 0;
 	}
 	else
@@ -109,16 +123,24 @@ int enqueue_tw(TWQ *pq, int ta, int tb, double theta)
 
 	if (pq->length == pq->size-256)
 	{
-		printf("Enlarge size0=%d, TA=%d, nPa=%d, TB=%d, nPb=%d, head=%d, tail=%d.\n", pq->size, ta, tree[ta].nPart, tb, tree[tb].nPart, pq->head, pq->tail);
+		printf("Enlarge Q0 s=%d, l=%d, TA=%d, nPa=%d, TB=%d, nPb=%d, hd=%d, tl=%d.\n", pq->size, pq->length, ta, tree[ta].nPart, tb, tree[tb].nPart, pq->head, pq->tail);
 		pq->size += QUEUE_BLOCK_SIZE;
 		pq->elements = (TWelement*)realloc(pq->elements, pq->size*sizeof(TWelement));
 		pe = pq->elements;
 		if (pq->tail < pq->head)
 		{
-			memcpy((void*)pe+pq->size-QUEUE_BLOCK_SIZE, (void*)pe, sizeof(TWelement)*pq->tail);
-			pq->tail = pq->head+pq->length;
+			if (pq->tail>QUEUE_BLOCK_SIZE)
+			{
+				memcpy((void*)(pe+pq->size-QUEUE_BLOCK_SIZE), (void*)pe, sizeof(TWelement)*QUEUE_BLOCK_SIZE);
+				memcpy((void*)pe, (void*)(pe+QUEUE_BLOCK_SIZE), sizeof(TWelement)*(pq->tail-QUEUE_BLOCK_SIZE));
+			}
+			else
+			{
+				memcpy((void*)(pe+pq->size-QUEUE_BLOCK_SIZE), (void*)pe, sizeof(PPelement)*pq->tail);
+			}
+			pq->tail=(pq->head+pq->length)%pq->size;
 		}
-		printf("Enlarge size1=%d, TA=%d, nPa=%d, TB=%d, nPb=%d, head=%d, tail=%d.\n", pq->size, ta, tree[ta].nPart, tb, tree[tb].nPart, pq->head, pq->tail);
+		printf("Enlarge Q1 s=%d, l=%d, TA=%d, nPa=%d, TB=%d, nPb=%d, hd=%d, tl=%d.\n", pq->size, pq->length, ta, tree[ta].nPart, tb, tree[tb].nPart, pq->head, pq->tail);
 	}
 	pe[pq->tail].TA = ta;
 	pe[pq->tail].TB = tb;
@@ -188,6 +210,21 @@ packarray3(Body* pp, int n, Array3 pa)
 	}
 }
 
+pusharray3(Body* pp, int n, Array3 pa)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	assert(pp);
+		
+	for (i=0;i<n;i++)
+	{
+		pp[i].pos[0] = pa.x[i];
+		pp[i].pos[1] = pa.y[i];
+		pp[i].pos[2] = pa.z[i];
+	}
+}
+
+
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask)
 {
 	enqueue_pp(PQ_ppnode, TA, TB, mask);
@@ -220,6 +257,15 @@ int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECT
 //		pB.x=pB.y=pB.z=NULL;	
 	}
 	process(pA, nA, pB, nB, EPS2, pC);
+
+	if (el.mask == 1)
+	{	
+		pC.x[0] *= tree[el.TB].mass;
+		pC.y[1] *= tree[el.TB].mass;
+		pC.z[2] *= tree[el.TB].mass;
+	}
+
+	pusharray3(&part[tree[el.TA].firstpart], nA, pC);
 }
 
 int EnqueueP_Cell(TWQ *PQ_treewalk, int TA, int TB, double theta)

@@ -10,7 +10,9 @@ KMP_AFFINITY ?= compact
 NUM_PROCS ?= 4
 
 CC=mpiicc
+MICCC=icc
 CFLAGS=-xHost -O3 $(OPENMP) -g -traceback
+CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(OPENMP) -g -traceback
 INC=-I/opt/intel/mkl/include/fftw
 
 LD=mpiicc
@@ -26,14 +28,23 @@ n: $(PROG)
 $(PROG): $(OBJS_CPU)
 	$(LD) -o $(PROG) $(OBJS_CPU) $(LDFLAGS) $(OPENMP)
 
+pp: ppkernel.o
+	$(CC) -o pp9 pp9.c ppkernel.o $(CFLAGS) $(LDFLAGS)
+
+ppmic: ppkernel.om
+	$(MICCC) -o pp9 pp9.c ppkernel.o $(CFLAGSMIC) $(LDFLAGS)
+
 .PHONY:clean
 clean:
-	rm -rf *.o $(PROG)
+	rm -rf *.o *.om $(PROG) pp9 pp9.mic
 
-.SUFFIXES: .c .o
+.SUFFIXES: .c .o .om
 
 .c.o:
 	$(CC) $(CFLAGS) $(INC) -c $<
+
+.c.om:
+	$(MICCC) $(CFLAGSMIC) $(INC) -o $*.om -c $<
 
 domain.o: domain.c domain.h data.h
 driver.o: driver.c driver.h
@@ -50,3 +61,6 @@ snapshot.o: snapshot.c snapshot.h data.h
 subcuboid.o: subcuboid.c subcuboid.h data.h
 subtree.o: subtree.c subtree.h domain.h data.h
 traversal.o: traversal.c traversal.h data.h
+
+pp9.om: pp9.c ppkernel.h
+ppkernel.om: ppkernel.c ppkernel.h

@@ -31,7 +31,7 @@
 #include "subcuboid.h"
 #include "ppkernel.h"
 
-#define QUEUE_BLOCK_SIZE 8388068
+#define QUEUE_BLOCK_SIZE 33554432
 
 typedef struct
 {

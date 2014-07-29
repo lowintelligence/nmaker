@@ -36,7 +36,7 @@ void setup_parameters_numproc(GlobalParam* gp) {
 //    gp->NumBits = 13;
 //    gp->NumBits = 9;
 //      gp->NumBits = 8;
-    gp->NumBits = 4;
+    gp->NumBits = 5;
 
 
 

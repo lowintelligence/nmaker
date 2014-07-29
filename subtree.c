@@ -113,7 +113,7 @@ void check_subtree(Domain *dp)
 					incorrect += 0x10000000000L;
 //					printf("i=%ld, j=%ld, je=%ld, js=%ld, root=%ld, rnumchild=%d, rnump=%d, rp=%d, ilevel=%ld, jlevel=%ld, jnpart=%d, jp=%d, meshnp=%d, meshp=%d.\n", i, j, je, js, rooti, tree[rooti].childnum, tree[rooti].nPart, tree[rooti].firstpart, level, tree[j].level, tree[j].nPart, tree[j].firstpart, dtp->numparticles[i], dtp->partidxes[i]);
 				}
-				if(tree[j].nPart==0)
+				if(tree[j].nPart==0 || (tree[j].childnum==0 && tree[j].nPart>MAX_PACKAGE_SIZE))
 				{
 					incorrect += 0x1000000L;
 				}
@@ -121,7 +121,7 @@ void check_subtree(Domain *dp)
 				if(tree[j].firstpart<dtp->partidxes[i] || tree[j].firstpart+tree[j].nPart>dtp->partidxes[i]+dtp->numparticles[i]) // Particle pointer error.
 				{
 //					printf("i=%ld, j=%ld, je=%ld, js=%ld, ilevel=%d, jlevel=%d, jnpart=%d, jp=%d, meshnp=%d, meshp=%d.\n", i, j, je, js, level, tree[j].level, tree[j].nPart, tree[j].firstpart, dtp->numparticles[i], dtp->partidxes[i]);
-					sleep(1);
+//					sleep(1);
 					incorrect += 0x100;
 				}
 				if(tree[j].childnum>0)

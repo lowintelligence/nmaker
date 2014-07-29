@@ -569,7 +569,26 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 //# Strict substraction of R for correct acceptance:
 //	double Rmax = SQROOT3 * (pTA->bmax + pTB->bmax); 
 //#	Alternative subtraction of R:
-	double Rmax = tree[TA].width + tree[TB].width;
+	double Rmax = tree[TB].width;
+	double Bmax = tree[TA].width;
+//	double Rmax = tree[TA].width + tree[TB].width;
+//	double Bmax = 0.0;
+
+	// Tree node include test.
+	if (tree[TA].level < tree[TB].level)
+	{
+		if (tree[TA].firstpart<=tree[TB].firstpart && tree[TA].firstpart+tree[TA].nPart>=tree[TB].firstpart)
+		{
+			return 0;
+		}
+	}
+	else if (tree[TA].level > tree[TB].level)
+	{
+		if (tree[TB].firstpart<=tree[TA].firstpart && tree[TB].firstpart+tree[TB].nPart>=tree[TA].firstpart)
+		{
+			return 0;
+		}
+	}
 
 	dr = 0.0;
 
@@ -581,7 +600,7 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 		dr += delta*delta;
 	}
 
-	dr = SQRT(dr) - Rmax;
+	dr = SQRT(dr) - Bmax;
 	if ( Rmax < theta * dr )
 	{
 		return 1;
@@ -634,7 +653,8 @@ int dtt_process_cell(int TA, int TB, double theta, PPQ *PQ_ppnode, TWQ *PQ_treew
 				/* Cao! See comments above. */
 				EnqueueP_PPnode(PQ_ppnode, TA, TB, 0);
 			}
-			else if ( tree[TB].childnum==0 || (tree[TA].childnum>0 && tree[TA].width>=tree[TB].width) )
+			else if ( tree[TB].childnum==0 || (tree[TA].childnum>0 && tree[TA].width>tree[TB].width) )
+//			else if ( tree[TB].childnum==0 || tree[TA].childnum>0 ) // Open A until reach the leaf.
 			{
 				int i;
 				for (i=0; i<tree[TA].childnum; i++)
@@ -717,11 +737,22 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 							}
 						}
 					}
-
 				}
 			}
 		}
 	}
+//							if (cnt==1) break;
+//						}
+//						if (cnt==1) break;
+//					}
+//					if (cnt==1) break;
+//				}
+//				if (cnt==1) break;
+//			}
+//			if (cnt==1) break;
+//		}
+//		if (cnt==1) break;
+//	}
     printf("\ncnt = %d\n", cnt);
 
 	while(PQ_treewalk.length>0)
@@ -730,15 +761,15 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	}
 	printf("\nQueue process finishing, total %d pp pairs.\n", PQ_ppnode.length);
 
-	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pb.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pb.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pb.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pc.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pc.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
-	pc.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*256);
+	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pb.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pb.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pb.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pc.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pc.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
+	pc.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
 //	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
 //	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
 //	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
