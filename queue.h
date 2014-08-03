@@ -30,6 +30,11 @@
 #include "parameter.h"
 #include "subcuboid.h"
 #include "ppkernel.h"
+#include <pthread.h>
+
+#define NTEAM   12 
+#define MASTER  1
+#define NSLAVE  1
 
 #define QUEUE_BLOCK_SIZE 33554432
 
@@ -47,6 +52,7 @@ typedef struct
 	int head;
 	int tail;
 	PPelement* elements;
+	int tag;//the queue is not to be added
 } PPQ;
 
 int init_queue_pp(PPQ *pq);
@@ -76,6 +82,32 @@ typedef struct
 	TWelement* elements;
 } TWQ;
 
+typedef struct _block
+{
+	int blockid;//id in one block
+	int bsize;//size of block
+	int tid;// thread id in all
+	int tall;//total num of threads
+
+	int teamid; //id of teams
+	PPQ* PQ_ppnode;
+	TWQ* PQ_treewalk;
+	PPQ* PQ_ptnode; //to be implemented
+	int first;
+	int last;
+
+	Domain* dp;
+	GlobalParam* gp;
+
+	pthread_t* thread;
+	struct _block* pthArr;
+	int* lower;
+	int* upper;
+	PPQ* P_PQ_ppnode;
+	TWQ* P_PQ_treewalk;
+	
+} Block;
+
 int init_queue_tw(TWQ *pq);
 
 int enqueue_tw(TWQ *pq, int ta, int tb, double theta);
@@ -89,3 +121,5 @@ int ProcessQP_Cell(TWQ *PQ_treewalk, PPQ *PQ_ppnode, int process(int, int, doubl
 
 void initGlobal(Body* p, Node* t);
 #endif
+
+

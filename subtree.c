@@ -195,9 +195,9 @@ void bucketsort(Body* part,int numparts,int* numparticles,int* partidxes,int Ngr
 	Body temp,temp1;
 	int meshid;
 	int* ppart=(int*)malloc(sizeof(int)*Ngrid);
-	for(i=0;i<numparts;i++){
-		numparticles[part[i].group]++;	
-	}
+//	for(i=0;i<numparts;i++){
+//		numparticles[part[i].group]++;	
+//	}
 
 	m=0;
 	for(i=0;i<Ngrid;i++){
@@ -772,11 +772,9 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
     /* set global variable for particles */
     part = dp->Part;
 	dtp->partidxes=(int*)malloc(Ngrid*sizeof(int));
-	dtp->numparticles=(int*)malloc(Ngrid*sizeof(int));
-	for(m=0;m<Ngrid;m++){
+	dtp->numparticles=sub->count;
+	for(m=0;m<Ngrid;m++)
 		dtp->partidxes[m]=-1;
-		dtp->numparticles[m]=0;
-	}
   
   clock_t time_start,time_end;
   time_start=clock();

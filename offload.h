@@ -21,19 +21,33 @@
 #include <sys/time.h>
 #include <pthread.h>
 
-#ifdef __INTEL_OFFLOAD
-__declspec(target(mic))
-#endif
+#define NTEAM   16
+#define MASTER  1
+#define NSLAVE  2
 typedef struct _block
 {
-	int blockid;
-	int bsize;
-	int tid;
-	int tall;
-	double *A;
-	double *B;
-	pthread_barrier_t *bbar;
-	pthread_barrier_t *bglobal;
+	int blockid;//id in one block
+	int bsize;//size of block
+	int tid;// thread id in all
+	int tall;//total num of threads
+
+	int teamid; //id of teams
+	PPQ* PQ_ppnode;
+	TWQ* PQ_treewalk;
+	PPQ* PQ_ptnode; //to be implemented
+	int first;
+	int last;
+
+	Domain* dp;
+	GlobalParam* gp;
+
+	pthread_t* thread;
+	struct _block* pth;
+	int* lower;
+	int* upper;
+	PPQ* P_PQ_ppnode;
+	TWQ* P_PQ_treewalk;
+	
 } Block;
 
 

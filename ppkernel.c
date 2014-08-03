@@ -20,12 +20,14 @@ double dtime()
 
 int get_block_tnum(int bid)
 {
-	return omp_get_num_threads();
+//	return omp_get_num_threads();
+	return 1;
 }
 
 int get_block_tid(int bid)
 {
-	return omp_get_thread_num();
+//	return omp_get_thread_num();
+	return 0;
 }
 
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
@@ -61,7 +63,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 
 //    tstart = dtime();
 
-#pragma omp parallel
+//#pragma omp parallel
 	{
 		int j, k, m, nb, mb, nt, mt, tid, tnum;
 

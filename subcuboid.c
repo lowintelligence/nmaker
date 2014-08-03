@@ -13,7 +13,7 @@ SubCuboid* get_frame_subcuboid(Domain* dp, GlobalParam *gp, int npad, int nbits)
     code cubekey;
     code lower, upper;
     double boxsize = gp->BoxSize;
-    double nbox_boxsize = (1<<nbits)/boxsize;
+    double nbox_boxsize = (double)(1<<nbits)/boxsize;
     unsigned long int npart = dp->NumPart;
     real minreal[3], maxreal[3];
     Body *part = dp->Part;

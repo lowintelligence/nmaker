@@ -11,12 +11,12 @@ NUM_PROCS ?= 4
 
 CC=mpiicc
 MICCC=icc
-CFLAGS=-xHost -O3 $(OPENMP) -g -traceback
-CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(OPENMP) -g -traceback
+CFLAGS=-xHost -O3 $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer 
+CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer
 INC=-I/opt/intel/mkl/include/fftw
 
 LD=mpiicc
-LDFLAGS=-L/opt/intel/mkl/lib/intel64 -lfftw2x_cdft_SINGLE_lp64 -lmkl_cdft_core -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential
+LDFLAGS=-L/opt/intel/mkl/lib/intel64 -lfftw2x_cdft_SINGLE_lp64 -lmkl_cdft_core -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -traceback -Bdynamic -fno-omit-frame-pointer
 
 run: $(PROG)
 	OMP_NUM_THREADS=$(OMP_NUM_THREADS) \
@@ -29,10 +29,10 @@ $(PROG): $(OBJS_CPU)
 	$(LD) -o $(PROG) $(OBJS_CPU) $(LDFLAGS) $(OPENMP)
 
 pp: ppkernel.o
-	$(CC) -o pp9 pp9.c ppkernel.o $(CFLAGS) $(LDFLAGS)
+	$(CC) -o pp9 pp9.c ppkernel.o $(CFLAGS)
 
 ppmic: ppkernel.om
-	$(MICCC) -o pp9 pp9.c ppkernel.o $(CFLAGSMIC) $(LDFLAGS)
+	$(MICCC) -o pp9.mic pp9.c ppkernel.om $(CFLAGSMIC)
 
 .PHONY:clean
 clean:

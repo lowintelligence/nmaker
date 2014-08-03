@@ -56,12 +56,18 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
     dp->NumPart = n_count;
     dp->Part = (Body*) malloc(sizeof(Body)*(n_count) );
     srand48(8888*myid);
-	int velocity=5000;
+	double velocity=5000.0;
     for (n=0; n<n_count; n++)
     {
 		dp->Part[n].pos[0]=drand48()*gp->BoxSize;
 		dp->Part[n].pos[1]=drand48()*gp->BoxSize;
 		dp->Part[n].pos[2]=drand48()*gp->BoxSize;
+		if(dp->Part[n].pos[0]>99999.97f)
+			dp->Part[n].pos[0]=99999.97f;
+		if(dp->Part[n].pos[1]>99999.97f)
+			dp->Part[n].pos[1]=99999.97f;
+		if(dp->Part[n].pos[2]>99999.97f)
+			dp->Part[n].pos[2]=99999.97f;
 //		dp->Part[n].vel[0]=drand48()*velocity;
 //		dp->Part[n].vel[1]=drand48()*velocity;
 //		dp->Part[n].vel[2]=drand48()*velocity;

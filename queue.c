@@ -27,13 +27,16 @@ void initGlobal(Body* p, Node* t)
 	tree = t;
 }
 
-int init_queue_pp(PPQ *pq)
+int init_queue_pp(PPQ *p_pq)
 {
-	pq->size = QUEUE_BLOCK_SIZE;
-	pq->length = 0;
-	pq->head = 0;
-	pq->tail = 0;
-	pq->elements = (PPelement*)malloc(sizeof(PPelement)*pq->size);
+	int i;
+	for(i=0;i<NTEAM;i++){
+	p_pq[i].size = QUEUE_BLOCK_SIZE;
+	p_pq[i].length = 0;
+	p_pq[i].head = 0;
+	p_pq[i].tail = 0;
+	p_pq[i].elements = (PPelement*)malloc(sizeof(PPelement)*p_pq[i].size);
+	}
 	return 0;
 }
 
@@ -107,13 +110,16 @@ int destroy_queue_pp(PPQ *pq)
 }
 
 
-int init_queue_tw(TWQ *pq)
+int init_queue_tw(TWQ *p_pq)
 {
-	pq->size = QUEUE_BLOCK_SIZE;
-	pq->length = 0;
-	pq->head = 0;
-	pq->tail = 0;
-	pq->elements = (TWelement*)malloc(sizeof(TWelement)*pq->size);
+	int i;
+	for(i=0;i<NTEAM;i++){
+	p_pq[i].size = QUEUE_BLOCK_SIZE;
+	p_pq[i].length = 0;
+	p_pq[i].head = 0;
+	p_pq[i].tail = 0;
+	p_pq[i].elements = (TWelement*)malloc(sizeof(TWelement)*p_pq[i].size);
+	}
 	return 0;
 }
 
@@ -218,9 +224,9 @@ pusharray3(Body* pp, int n, Array3 pa)
 		
 	for (i=0;i<n;i++)
 	{
-		pp[i].pos[0] = pa.x[i];
-		pp[i].pos[1] = pa.y[i];
-		pp[i].pos[2] = pa.z[i];
+		pp[i].acc[0] += pa.x[i];
+		pp[i].acc[1] += pa.y[i];
+		pp[i].acc[2] += pa.z[i];
 	}
 }
 

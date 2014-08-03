@@ -559,6 +559,165 @@ int main(void)
     return 0;
 }
 */
+int threaded(pthread_t* thread, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* lower,int* upper, Domain*dp,GlobalParam*gp,void* process(void*))
+{
+	int i,teamid;
+    printf("before threaded\n");
+//	sleep(2);	
+	for (i=ts; i<te+1; i++)
+	{
+		pth[i].blockid = i/NTEAM;
+		pth[i].teamid=i%NTEAM;
+		teamid=pth[i].teamid;
+		pth[i].bsize = MASTER+NSLAVE;
+		pth[i].tid = i;
+		pth[i].tall = NTEAM*(MASTER+NSLAVE);
+		pth[i].PQ_ppnode = &pq[teamid];
+		pth[i].PQ_treewalk = &tq[teamid];
+		pth[i].first=lower[teamid];
+		pth[i].last=upper[teamid];
+		
+		pth[i].dp=dp;
+		pth[i].gp=gp;
+		pth[i].thread=thread;
+		pth[i].pthArr=pth;
+		pth[i].lower=lower;
+		pth[i].upper=upper;
+		pth[i].P_PQ_ppnode=pq;
+		pth[i].P_PQ_treewalk=tq;
+		pthread_create(&thread[i], NULL, process, (void*)&pth[i]);
+	}
+}
+
+void* compPP(void* param){
+	Array3 pa, pb, pc;
+	int i,j,k,n,m,l;
+	Block* pth=(Block*)param;
+	int blockid=pth->blockid;
+	int teamid=pth->teamid;
+	int bsize=pth->bsize;
+	int tid=pth->tid;
+	int tall=pth->tall;
+	PPQ* PQ_ppnode=pth->PQ_ppnode;
+	TWQ* PQ_treewalk=pth->PQ_treewalk;
+	Domain* dp=pth->dp;
+	GlobalParam* gp=pth->gp;
+	pthread_t* thread=pth->thread;
+	Block* pthArr=pth->pthArr;
+	
+//	printf("\nQueue process finishing, total %d pp pairs.\n", PQ_ppnode->length);
+	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pb.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pb.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pb.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pc.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pc.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+	pc.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*3)));
+
+    printf("before ppkernel\n");
+	sleep(5);	
+	while(PQ_ppnode->length>0||PQ_ppnode->tag==0)
+	{
+		if(PQ_ppnode->length>0)
+		ProcessQP_PPnode(PQ_ppnode, ppkernel, pa, pb, pc);
+	}
+    printf("after ppkernel\n");	
+	printf("\nPP processing finished.\n");
+
+	free(pa.x);
+	free(pa.y);
+	free(pa.z);
+	free(pb.x);
+	free(pb.y);
+	free(pb.z);
+	free(pc.x);
+	free(pc.y);
+	free(pc.z);
+
+//	destroy_queue_pp(&PQ_ppnode);
+//	destroy_queue_tw(&PQ_treewalk);
+		
+}
+
+void* teamMaster(void* param){
+	
+	int i,j,k,n,m,l,i1,i2,i3,cella;
+	Block* pth=(Block*)param;
+	int blockid=pth->blockid;
+	int teamid=pth->teamid;
+	int bsize=pth->bsize;
+	int tid=pth->tid;
+	int tall=pth->tall;
+	PPQ* PQ_ppnode=pth->PQ_ppnode;
+	TWQ* PQ_treewalk=pth->PQ_treewalk;
+	int first=pth->first;
+	int last=pth->last;
+	Domain* dp=pth->dp;
+	GlobalParam* gp=pth->gp;
+	pthread_t* thread=pth->thread;
+	Block* pthArr=pth->pthArr;
+	int* lower=pth->lower;
+	int* upper=pth->upper;
+	PPQ* P_PQ_ppnode=pth->P_PQ_ppnode;
+	TWQ* P_PQ_treewalk=pth->P_PQ_treewalk;
+	
+    int In = dp->cuboid->nSide[0];
+    int Jn = dp->cuboid->nSide[1];
+    int Kn = dp->cuboid->nSide[2];
+    int cnt = 0;
+    open_angle = 0.3;
+
+    DomainTree *dtp = dp->domtree;
+    int npart = dp->NumPart;
+    part = dp->Part;
+    tree = dtp->tree;
+    printf("first last %d,%d\n",first,last);
+	for(i=first;i<last;i++){
+		i1=i/(Jn*Kn);
+		if(i1==0||i1==In-1)
+			continue;	
+		i2=(i-i1*Jn*Kn)/Kn;
+		if(i2==0||i2==Jn-1)
+			continue;	
+		i3=i-i1*Jn*Kn-i2*Kn;
+		if(i3==0||i3==Kn-1)
+			continue;
+		cella=i;	
+				for (n=i1-1; n<i1+2; n++)
+				{
+					for (m=i2-1; m<i2+2; m++)
+					{
+						for (l=i3-1; l<i3+2; l++)
+						{
+							int cellb = n*(Jn*Kn)+m*Kn+l;
+							if (dtp->numparticles[cella]>0 && dtp->numparticles[cellb]>0)
+							{
+								if(dtp->root_cell[cella]==0)
+								printf("enqueue: i:%d, j:%d, k:%d, n:%d, m:%d, l:%d, ta:%d, tb:%d, na=%d, nb=%d\n", i, j, k, n, m, l, dtp->root_cell[cella], dtp->root_cell[cellb], tree[dtp->root_cell[cella]].nPart, tree[dtp->root_cell[cellb]].nPart);
+								EnqueueP_Cell(PQ_treewalk, dtp->root_cell[cella], dtp->root_cell[cellb], open_angle);
+//								printf("E");
+								cnt++;
+							}
+						}
+					}
+				}
+	}
+	printf("\ncnt = %d\n", cnt);
+	
+	PQ_ppnode->tag=0;
+	threaded(thread, pthArr, NTEAM+NSLAVE*teamid, NTEAM+NSLAVE*(teamid+1)-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, dp,gp,compPP);
+
+	while(PQ_treewalk->length>0)
+	{
+		ProcessQP_Cell(PQ_treewalk, PQ_ppnode, dtt_process_cell);
+	}
+	PQ_ppnode->tag=1;
+	printf("\nQueue process finishing, total %d pp pairs.\n", PQ_ppnode->length);
+	
+}
+
 
 // Cao! Use this critertian for cell/cell acceptance judging. 
 int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_angle  */)
@@ -676,128 +835,70 @@ int dtt_process_cell(int TA, int TB, double theta, PPQ *PQ_ppnode, TWQ *PQ_treew
 
 void dtt_traversal(Domain *dp, GlobalParam *gp)
 {
-    int i,j,k, ic, jc, kc;
+    int i, j, k, m, n, l;
     int In, Jn, Kn;
-    int level;
-    int group, index;
-    int first_node;
     int npart;
-	Array3 pa, pb, pc;
-
-//    Node *tree;
-//    Body* part;
-    DomainTree *dtp = dp->domtree;
 
     npart = dp->NumPart;
+	int cnt = 0;
+    In = (dp->cuboid)->nSide[0];
+    Jn = (dp->cuboid)->nSide[1];
+    Kn = (dp->cuboid)->nSide[2];
+    DomainTree *dtp = dp->domtree;
     part = dp->Part;
     tree = dp->domtree->tree;
-    FIRST_NODE = dp->NumPart;
 
-    open_angle = 0.3;
-    level = gp->NumBits;
-    int cnt = 0;
-    In = dp->cuboid->nSide[0];
-    Jn = dp->cuboid->nSide[1];
-    Kn = dp->cuboid->nSide[2];
+	TWQ *P_PQ_treewalk;
+	PPQ *P_PQ_ppnode;
 
-	TWQ PQ_treewalk;
-	PPQ PQ_ppnode;
+	Block* pth;
+	pthread_t* thread;
+	
+	int tnum=NTEAM*(MASTER+NSLAVE);
+	pth = (Block*)malloc(sizeof(Block)*tnum);
+	thread = (pthread_t*)malloc(sizeof(pthread_t)*tnum);
+	P_PQ_ppnode=(PPQ*)malloc(sizeof(PPQ)*NTEAM);
+	P_PQ_treewalk=(TWQ*)malloc(sizeof(TWQ)*NTEAM);
 
 	initGlobal(part, tree);
 	printf("Init queue ppnode.\n");
-	init_queue_pp(&PQ_ppnode);
+	init_queue_pp(P_PQ_ppnode);
 	printf("Init queue treewalk.\n");
-	init_queue_tw(&PQ_treewalk);
+	init_queue_tw(P_PQ_treewalk);
 
-	for (i=1; i<In-1; i++)
+	printf("real domain In-2:%d, Jn-2:%d, Kn-2:%d\n", In-2, Jn-2, Kn-2);
+	int *accum,*lower,*upper,*numpart;
+	int accum_thread;
+	int Ngrid=In*Jn*Kn;
+	int* count=(dp->cuboid)->count;
+	accum_thread=npart/NTEAM;
+	accum=(int*)malloc(sizeof(int)*Ngrid);
+	accum[0]=count[0];
+    for (n=1; n<Ngrid; n++) {
+        accum[n] = accum[n-1] + count[n];
+    }
+    lower = (int*)malloc(sizeof(int)*NTEAM);
+    upper = (int*)malloc(sizeof(int)*NTEAM);
+    numpart = (int*)malloc(sizeof(int)*NTEAM);
+
+    lower[0] = 0;
+    for (m=1, n=0; n<Ngrid; n++) {
+        if ( accum[n] > m*accum_thread ) {
+            lower[m] = upper[m-1] = n;
+            m++;
+        }
+    }
+    upper[NTEAM-1]=Ngrid;
+
+    numpart[0] = accum[upper[0]-1];
+    for (m=1; m<NTEAM; m++) {
+        numpart[m] = accum[upper[m]-1] - accum[lower[m]-1];
+    }
+    printf("before teamMaster\n");	
+	threaded(thread, pth, 0, NTEAM-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, dp,gp,teamMaster);
+    printf("after teamMaster\n");	
+	for (i=0; i<tnum; i++)
 	{
-		for (j=1; j<Jn-1; j++)
-		{
-			for (k=1; k<Kn-1; k++)
-			{
-				int n;
-				int m;
-				int l;
-				int cella = i*(Jn*Kn)+j*Kn+k;
-//				printf("Processing i:%d, j:%d, k:%d  ", i, j, k);
-				for (n=i-1; n<i+2; n++)
-				{
-					for (m=j-1; m<j+2; m++)
-					{
-						for (l=k-1; l<k+2; l++)
-						{
-							int cellb = n*(Jn*Kn)+m*Kn+l;
-							if (dtp->numparticles[cella]>0 && dtp->numparticles[cellb]>0)
-							{
-								if(dtp->root_cell[cella]==0)
-								printf("enqueue: i:%d, j:%d, k:%d, n:%d, m:%d, l:%d, ta:%d, tb:%d, na=%d, nb=%d\n", i, j, k, n, m, l, dtp->root_cell[cella], dtp->root_cell[cellb], tree[dtp->root_cell[cella]].nPart, tree[dtp->root_cell[cellb]].nPart);
-								EnqueueP_Cell(&PQ_treewalk, dtp->root_cell[cella], dtp->root_cell[cellb], open_angle);
-//								printf("E");
-								cnt++;
-							}
-						}
-					}
-				}
-			}
-		}
+		pthread_join(thread[i], NULL);
 	}
-//							if (cnt==1) break;
-//						}
-//						if (cnt==1) break;
-//					}
-//					if (cnt==1) break;
-//				}
-//				if (cnt==1) break;
-//			}
-//			if (cnt==1) break;
-//		}
-//		if (cnt==1) break;
-//	}
-    printf("\ncnt = %d\n", cnt);
-
-	while(PQ_treewalk.length>0)
-	{
-		ProcessQP_Cell(&PQ_treewalk, &PQ_ppnode, dtt_process_cell);
-	}
-	printf("\nQueue process finishing, total %d pp pairs.\n", PQ_ppnode.length);
-
-	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pb.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pb.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pb.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pc.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pc.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-	pc.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
-//	pa.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pa.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pa.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pb.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pb.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pb.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pc.x = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pc.y = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-//	pc.z = (PRECTYPE*)malloc(sizeof(PRECTYPE)*MAX_PACKAGE_SIZE);
-
-	while(PQ_ppnode.length>0)
-	{
-		ProcessQP_PPnode(&PQ_ppnode, ppkernel, pa, pb, pc);
-	}
-	printf("\nPP processing finished.\n");
-
-	free(pa.x);
-	free(pa.y);
-	free(pa.z);
-	free(pb.x);
-	free(pb.y);
-	free(pb.z);
-	free(pc.x);
-	free(pc.y);
-	free(pc.z);
-
-	destroy_queue_pp(&PQ_ppnode);
-	destroy_queue_tw(&PQ_treewalk);
 }
-
-

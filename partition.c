@@ -580,9 +580,11 @@ void partition_domains(Domain *dp, int NumThread)
 
     //  MPI_Barrier( MPI_COMM_WORLD );
 
+        printf("before alltoallv in partition\n");
     int mpi_err =
         MPI_Alltoallv( sendbuff, sendcount, senddispl, mpi_body,
                        part, recvcount, recvdispl, mpi_body, MPI_COMM_WORLD );
+        printf("after  alltoallv in partition\n");
 
     if (mpi_err != 0 ) {
         printf("error = %d \n", mpi_err);
