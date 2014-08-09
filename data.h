@@ -31,6 +31,7 @@ typedef uint32_t count;
 typedef real vect3d[DIM];
 
 #include "fillcurve.h"
+#include "offload.h"
 
 typedef struct {
     long int ID; // constant particle ID

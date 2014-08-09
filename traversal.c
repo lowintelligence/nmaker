@@ -1,12 +1,17 @@
 #include "traversal.h"
 #include <time.h>
 #include <math.h>
+#include <pthread.h>
 
+__OffloadVar_Macro__
 static Body *part;
+
+__OffloadVar_Macro__
 static Node *tree; // thread number
-static int FIRST_NODE;
-double open_angle;
+
 /*  
+static int FIRST_NODE;
+
 int accepted_cell_branes(int one, int ns, Node *tree, Body *part)
 {
     int d, n, id;
@@ -559,6 +564,7 @@ int main(void)
     return 0;
 }
 */
+__OffloadFunc_Macro__
 int threaded(pthread_t* thread, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* lower,int* upper, Domain*dp,GlobalParam*gp,void* process(void*))
 {
 	int i,teamid;
@@ -589,6 +595,7 @@ int threaded(pthread_t* thread, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, in
 	}
 }
 
+__OffloadFunc_Macro__
 void* compPP(void* param){
 	Array3 pa, pb, pc;
 	int i,j,k,n,m,l;
@@ -641,6 +648,7 @@ void* compPP(void* param){
 		
 }
 
+__OffloadFunc_Macro__
 void* teamMaster(void* param){
 	
 	int i,j,k,n,m,l,i1,i2,i3,cella;
@@ -667,7 +675,7 @@ void* teamMaster(void* param){
     int Jn = dp->cuboid->nSide[1];
     int Kn = dp->cuboid->nSide[2];
     int cnt = 0;
-    open_angle = 0.3;
+    double open_angle = 0.3;
 
     DomainTree *dtp = dp->domtree;
     int npart = dp->NumPart;
@@ -703,6 +711,13 @@ void* teamMaster(void* param){
 						}
 					}
 				}
+//							if (cnt==1) break;
+//						}
+//						if (cnt==1) break;
+//					}
+//					if (cnt==1) break;
+//				}
+//				if (cnt==1) break;
 	}
 	printf("\ncnt = %d\n", cnt);
 	
@@ -720,6 +735,7 @@ void* teamMaster(void* param){
 
 
 // Cao! Use this critertian for cell/cell acceptance judging. 
+__OffloadFunc_Macro__
 int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_angle  */)
 {
 	double delta, dr;
@@ -771,6 +787,7 @@ int accepted_cell_to_cell(int TA, int TB, double theta/* Here theta is the open_
 }
 
 // Cao! Walk the tree using Dual Tree Traversel algorithm.
+__OffloadFunc_Macro__
 int dtt_process_cell(int TA, int TB, double theta, PPQ *PQ_ppnode, TWQ *PQ_treewalk)
 {
 //	assert ((tree[TA].level >=0) && (tree[TA].level <= MAX_MORTON_LEVEL));
@@ -833,6 +850,7 @@ int dtt_process_cell(int TA, int TB, double theta, PPQ *PQ_ppnode, TWQ *PQ_treew
 	}
 }
 
+__OffloadFunc_Macro__
 void dtt_traversal(Domain *dp, GlobalParam *gp)
 {
     int i, j, k, m, n, l;

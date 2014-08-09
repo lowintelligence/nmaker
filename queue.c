@@ -18,15 +18,20 @@
 #include "queue.h"
 #include <assert.h>
 
+__OffloadVar_Macro__
 static Body* part;
+
+__OffloadVar_Macro__
 static Node* tree;
 
+__OffloadFunc_Macro__
 void initGlobal(Body* p, Node* t)
 {
 	part = p;
 	tree = t;
 }
 
+__OffloadFunc_Macro__
 int init_queue_pp(PPQ *p_pq)
 {
 	int i;
@@ -40,6 +45,7 @@ int init_queue_pp(PPQ *p_pq)
 	return 0;
 }
 
+__OffloadFunc_Macro__
 int enqueue_pp(PPQ *pq, int ta, int tb, int m)
 {
 	PPelement *pe=pq->elements;
@@ -73,6 +79,7 @@ int enqueue_pp(PPQ *pq, int ta, int tb, int m)
 	return 0;
 }
 
+__OffloadFunc_Macro__
 int dequeue_pp(PPQ *pq, PPelement *peout)
 {
 	PPelement *pe = pq->elements+pq->head;
@@ -97,6 +104,7 @@ int dequeue_pp(PPQ *pq, PPelement *peout)
 	}
 }
 
+__OffloadFunc_Macro__
 int destroy_queue_pp(PPQ *pq)
 {
 	if (pq->size > 0)
@@ -110,6 +118,7 @@ int destroy_queue_pp(PPQ *pq)
 }
 
 
+__OffloadFunc_Macro__
 int init_queue_tw(TWQ *p_pq)
 {
 	int i;
@@ -123,6 +132,7 @@ int init_queue_tw(TWQ *p_pq)
 	return 0;
 }
 
+__OffloadFunc_Macro__
 int enqueue_tw(TWQ *pq, int ta, int tb, double theta)
 {
 	TWelement *pe=pq->elements;
@@ -142,7 +152,7 @@ int enqueue_tw(TWQ *pq, int ta, int tb, double theta)
 			}
 			else
 			{
-				memcpy((void*)(pe+pq->size-QUEUE_BLOCK_SIZE), (void*)pe, sizeof(PPelement)*pq->tail);
+				memcpy((void*)(pe+pq->size-QUEUE_BLOCK_SIZE), (void*)pe, sizeof(TWelement)*pq->tail);
 			}
 			pq->tail=(pq->head+pq->length)%pq->size;
 		}
@@ -157,6 +167,7 @@ int enqueue_tw(TWQ *pq, int ta, int tb, double theta)
 	return 0;
 }
 
+__OffloadFunc_Macro__
 int dequeue_tw(TWQ *pq, TWelement *peout)
 {
 	TWelement *pe = pq->elements+pq->head;
@@ -179,6 +190,7 @@ int dequeue_tw(TWQ *pq, TWelement *peout)
 	}
 }
 
+__OffloadFunc_Macro__
 int destroy_queue_tw(TWQ *pq)
 {
 	if (pq->size > 0)
@@ -192,6 +204,7 @@ int destroy_queue_tw(TWQ *pq)
 }
 
 
+__OffloadFunc_Macro__
 packarray3(Body* pp, int n, Array3 pa)
 {
 	int i;
@@ -216,6 +229,7 @@ packarray3(Body* pp, int n, Array3 pa)
 	}
 }
 
+__OffloadFunc_Macro__
 pusharray3(Body* pp, int n, Array3 pa)
 {
 	int i;
@@ -231,11 +245,13 @@ pusharray3(Body* pp, int n, Array3 pa)
 }
 
 
+__OffloadFunc_Macro__
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask)
 {
 	enqueue_pp(PQ_ppnode, TA, TB, mask);
 }
 
+__OffloadFunc_Macro__
 int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC)
 {
 	PPelement el;
@@ -274,12 +290,14 @@ int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECT
 	pusharray3(&part[tree[el.TA].firstpart], nA, pC);
 }
 
+__OffloadFunc_Macro__
 int EnqueueP_Cell(TWQ *PQ_treewalk, int TA, int TB, double theta)
 {
 	enqueue_tw(PQ_treewalk, TA, TB, theta);
 //	printf("e");
 }
 
+__OffloadFunc_Macro__
 int ProcessQP_Cell(TWQ *PQ_treewalk, PPQ *PQ_ppnode, int process(int, int, double, PPQ*, TWQ*))
 {
 	TWelement el;

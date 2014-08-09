@@ -16,38 +16,20 @@
  * =====================================================================================
  */
 
+#ifndef _OFFLOAD_H_
+#define _OFFLOAD_H_
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <pthread.h>
 
-#define NTEAM   16
-#define MASTER  1
-#define NSLAVE  2
-typedef struct _block
-{
-	int blockid;//id in one block
-	int bsize;//size of block
-	int tid;// thread id in all
-	int tall;//total num of threads
+#ifdef __INTEL_OFFLOAD 
+	#define __OffloadVar_Macro__ __declspec(target(mic)) 
+	#define __OffloadFunc_Macro__ __attribute__ ((target(mic)))
+#else
+	#define __OffloadVar_Macro__
+	#define __OffloadFunc_Macro__
+#endif
 
-	int teamid; //id of teams
-	PPQ* PQ_ppnode;
-	TWQ* PQ_treewalk;
-	PPQ* PQ_ptnode; //to be implemented
-	int first;
-	int last;
-
-	Domain* dp;
-	GlobalParam* gp;
-
-	pthread_t* thread;
-	struct _block* pth;
-	int* lower;
-	int* upper;
-	PPQ* P_PQ_ppnode;
-	TWQ* P_PQ_treewalk;
-	
-} Block;
-
-
+#endif

@@ -19,6 +19,8 @@
 #ifndef _PPKERNEL_H_
 #define _PPKERNEL_H_
 
+#include "offload.h"
+
 #define ALIGNCNT 64
 #define __single_prec
 #define EPS2 0.00026
@@ -43,12 +45,14 @@
 	#define __MULTI_THREAD_
 #endif
 
+__OffloadVar_Macro__
 typedef struct {
 	PRECTYPE *x;
 	PRECTYPE *y;
 	PRECTYPE *z;
 } Array3;
 
+__OffloadVar_Macro__
 typedef struct {
     Array3 pos;
     Array3 acc;
@@ -59,9 +63,13 @@ typedef struct {
 //int get_local_tnum();
 //int get_local_tid();
 
+__OffloadFunc_Macro__
 int get_block_tnum(int bid);
+
+__OffloadFunc_Macro__
 int get_block_tid(int bid);
 
+__OffloadFunc_Macro__
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C);
 
 #endif

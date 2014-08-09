@@ -6,6 +6,7 @@
 #include <malloc.h>
 #include <omp.h>
 
+#include "offload.h"
 #include "ppkernel.h"
 
 #ifdef __PAPI
@@ -13,8 +14,10 @@
 #include <papi.h>
 #endif
 
+__OffloadVar_Macro__
 PPPack part;
 
+__OffloadFunc_Macro__
 double dtime();
 
 float ran3(long *idum);
@@ -109,13 +112,91 @@ int main(int argc, char *argv[])
  //   omp_set_num_threads(32);
   //  kmp_set_defaults("KMP_AFFINITY=compact");
 //    kmp_set_defaults("KMP_AFFINITY=scatter");
+#ifdef __INTEL_OFFLOAD
+	int nCPU;
+	int nMIC0;
+	int nMIC1;
+
+//	nCPU = 0;
+//	nMIC0 = nPart / 2;
+	nCPU = (int) ((double)nPart / (double)CLCNT / 6.72) * CLCNT; 
+	nMIC0 = (int) ((double)nCPU * 2.86) / CLCNT * CLCNT; 
+	nMIC1 = nPart - nCPU - nMIC0;
+	printf ("nCPU=%d, nMIC0=%d, nMIC1=%d.\n", nCPU, nMIC0, nMIC1);
+
+	PRECTYPE *px = part.pos.x;
+	PRECTYPE *py = part.pos.y;
+	PRECTYPE *pz = part.pos.z;
+	PRECTYPE *ax = part.acc.x;
+	PRECTYPE *ay = part.acc.y;
+	PRECTYPE *az = part.acc.z;
+	PRECTYPE *ax0 = part.acc.x + nCPU;
+	PRECTYPE *ay0 = part.acc.y + nCPU;
+	PRECTYPE *az0 = part.acc.z + nCPU;
+	PRECTYPE *ax1 = part.acc.x + nCPU + nMIC0;
+	PRECTYPE *ay1 = part.acc.y + nCPU + nMIC0;
+	PRECTYPE *az1 = part.acc.z + nCPU + nMIC0;
+#pragma offload target(mic:0) in (px[0:nPart]:alloc_if(1) free_if(0)) in (py[0:nPart]:alloc_if(1) free_if(0)) in (pz[0:nPart]:alloc_if(1) free_if(0)) out (ax0[0:nMIC0]:alloc_if(1) free_if(0)) out (ay0[0:nMIC0]:alloc_if(1) free_if(0)) out (az0[0:nMIC0]:alloc_if(1) free_if(0)) signal(nMIC0)
+{
+	int n;
+	Array3 PA, PB, AC;
+	PB.x = px;
+	PB.y = py;
+	PB.z = pz;
+	PA.x = px + nCPU;
+	PA.y = py + nCPU;
+	PA.z = pz + nCPU;
+	AC.x = ax0;
+	AC.y = ay0;
+	AC.z = az0;
+    kmp_set_defaults("KMP_AFFINITY=compact");
 #pragma omp parallel for schedule(static)
-    for (n=0; n<nPart; n++) {
+    for (n=0; n<nMIC0; n++) {
+         AC.x[n] = 0;
+         AC.y[n] = 0;
+         AC.z[n] = 0;
+    }
+}
+#pragma offload target(mic:1) in (px[0:nPart]:alloc_if(1) free_if(0)) in (py[0:nPart]:alloc_if(1) free_if(0)) in (pz[0:nPart]:alloc_if(1) free_if(0)) out (ax1[0:nMIC1]:alloc_if(1) free_if(0)) out (ay1[0:nMIC1]:alloc_if(1) free_if(0)) out (az1[0:nMIC1]:alloc_if(1) free_if(0)) signal(nMIC1)
+{
+	int n;
+	Array3 PA, PB, AC;
+	PB.x = px;
+	PB.y = py;
+	PB.z = pz;
+	PA.x = px + nCPU + nMIC0;
+	PA.y = py + nCPU + nMIC0;
+	PA.z = pz + nCPU + nMIC0;
+	AC.x = ax1;
+	AC.y = ay1;
+	AC.z = az1;
+    kmp_set_defaults("KMP_AFFINITY=compact");
+#pragma omp parallel for schedule(static)
+    for (n=0; n<nMIC1; n++) {
+         AC.x[n] = 0;
+         AC.y[n] = 0;
+         AC.z[n] = 0;
+    }
+}
+
+    kmp_set_defaults("KMP_AFFINITY=compact");
+#pragma omp parallel for schedule(static)
+    for (n=0; n<nCPU; n++) {
          part.acc.x[n] = 0;
          part.acc.y[n] = 0;
          part.acc.z[n] = 0;
     }
-    
+#pragma offload_wait target(mic:0) wait(nMIC0)
+#pragma offload_wait target(mic:1) wait(nMIC1)
+//	printf ("nCPU=%d, nMIC0=%d, nMIC1=%d.\n", nCPU, nMIC0, nMIC1);
+#else
+#pragma omp parallel for schedule(static)
+    for (n=0; n<la; n++) {
+         part.acc.x[n] = 0;
+         part.acc.y[n] = 0;
+         part.acc.z[n] = 0;
+    }
+#endif   
     tstart = dtime();
 
 #ifdef __PAPI
@@ -129,7 +210,44 @@ int main(int argc, char *argv[])
 	PAPI_start(EventSet);
 #endif
 
+#ifdef __INTEL_OFFLOAD
+#pragma offload target(mic:0) in (px[0:nPart]:alloc_if(0)) in (py[0:nPart]:alloc_if(0)) in (pz[0:nPart]:alloc_if(0)) out (ax0[0:nMIC0]:alloc_if(0)) out (ay0[0:nMIC0]:alloc_if(0)) out (az0[0:nMIC0]:alloc_if(0)) signal(nMIC0)
+{
+//	printf ("MIC0: la=%d, nCPU=%d, nMIC0=%d, nMIC1=%d.\n", la, nCPU, nMIC0, nMIC1);
+	Array3 PA, PB, AC;
+	PB.x = px;
+	PB.y = py;
+	PB.z = pz;
+	PA.x = px + nCPU;
+	PA.y = py + nCPU;
+	PA.z = pz + nCPU;
+	AC.x = ax0;
+	AC.y = ay0;
+	AC.z = az0;
+	ppkernel(PA, nMIC0, PB, lb, eps, AC);
+}
+#pragma offload target(mic:1) in (px[0:nPart]:alloc_if(0)) in (py[0:nPart]:alloc_if(0)) in (pz[0:nPart]:alloc_if(0)) out (ax1[0:nMIC1]:alloc_if(0)) out (ay1[0:nMIC1]:alloc_if(0)) out (az1[0:nMIC1]:alloc_if(0)) signal(nMIC1)
+{
+//	printf ("MIC1: la=%d, nCPU=%d, nMIC0=%d, nMIC1=%d.\n", la, nCPU, nMIC0, nMIC1);
+	Array3 PA, PB, AC;
+	PB.x = px;
+	PB.y = py;
+	PB.z = pz;
+	PA.x = px + nCPU + nMIC0;
+	PA.y = py + nCPU + nMIC0;
+	PA.z = pz + nCPU + nMIC0;
+	AC.x = ax1;
+	AC.y = ay1;
+	AC.z = az1;
+	ppkernel(PA, nMIC1, PB, lb, eps, AC);
+}
+//	printf ("la=%d, nCPU=%d, nMIC0=%d, nMIC1=%d.\n", la, nCPU, nMIC0, nMIC1);
+	ppkernel(part.pos, nCPU, part.pos, lb, eps, part.acc);
+#pragma offload_wait target(mic:0) wait(nMIC0)
+#pragma offload_wait target(mic:1) wait(nMIC1)
+#else
 	ppkernel(part.pos, la, part.pos, lb, eps, part.acc);
+#endif
 
 #ifdef __PAPI
 	PAPI_stop(EventSet, &value);

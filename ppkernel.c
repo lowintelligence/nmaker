@@ -9,6 +9,7 @@
 #include "ppkernel.h"
 //#include "dtime.h"
 
+__OffloadFunc_Macro__
 double dtime()
 {
 	double tseconds = 0.0;
@@ -18,18 +19,21 @@ double dtime()
 	return (tseconds);
 }
 
+__OffloadFunc_Macro__
 int get_block_tnum(int bid)
 {
-//	return omp_get_num_threads();
-	return 1;
+	return omp_get_num_threads();
+//	return 1;
 }
 
+__OffloadFunc_Macro__
 int get_block_tid(int bid)
 {
-//	return omp_get_thread_num();
-	return 0;
+	return omp_get_thread_num();
+//	return 0;
 }
 
+__OffloadFunc_Macro__
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 {
     int n;
@@ -63,7 +67,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 
 //    tstart = dtime();
 
-//#pragma omp parallel
+#pragma omp parallel
 	{
 		int j, k, m, nb, mb, nt, mt, tid, tnum;
 
@@ -75,6 +79,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 
 		tid = get_block_tid(0);
 		tnum = get_block_tnum(0);
+
 	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
