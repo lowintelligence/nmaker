@@ -32,10 +32,10 @@ void initGlobal(Body* p, Node* t)
 }
 
 __OffloadFunc_Macro__
-int init_queue_pp(PPQ *p_pq)
+int init_queue_pp(PPQ *p_pq, int n)
 {
 	int i;
-	for(i=0;i<NTEAM;i++)
+	for(i=0;i<n;i++)
 	{
 		p_pq[i].size = QUEUE_BLOCK_SIZE;
 		p_pq[i].length = 0;
@@ -120,10 +120,10 @@ int destroy_queue_pp(PPQ *pq)
 
 
 __OffloadFunc_Macro__
-int init_queue_tw(TWQ *p_pq)
+int init_queue_tw(TWQ *p_pq, int n)
 {
 	int i;
-	for(i=0;i<NTEAM;i++){
+	for(i=0;i<n;i++){
 	p_pq[i].size = QUEUE_BLOCK_SIZE;
 	p_pq[i].length = 0;
 	p_pq[i].head = 0;

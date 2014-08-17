@@ -33,10 +33,6 @@
 #include "offload.h"
 #include <pthread.h>
 
-#define NTEAM   60
-#define MASTER  1
-#define NSLAVE  1
-
 #define QUEUE_BLOCK_SIZE 16777216
 
 typedef struct
@@ -57,7 +53,7 @@ typedef struct
 } PPQ;
 
 __OffloadFunc_Macro__
-int init_queue_pp(PPQ *pq);
+int init_queue_pp(PPQ *pq, int n);
 
 __OffloadFunc_Macro__
 int enqueue_pp(PPQ *pq, int ta, int tb, int m);
@@ -90,35 +86,8 @@ typedef struct
 	TWelement* elements;
 } TWQ;
 
-typedef struct _block
-{
-	int blockid;//id in one block
-	int bsize;//size of block
-	int tid;// thread id in all
-	int tall;//total num of threads
-
-	int teamid; //id of teams
-	PPQ* PQ_ppnode;
-	TWQ* PQ_treewalk;
-	PPQ* PQ_ptnode; //to be implemented
-	int first;
-	int last;
-
-	Domain* dp;
-	GlobalParam* gp;
-
-	pthread_t* thread;
-	pthread_mutex_t *mutex;
-	struct _block* pthArr;
-	int* lower;
-	int* upper;
-	PPQ* P_PQ_ppnode;
-	TWQ* P_PQ_treewalk;
-	
-} Block;
-
 __OffloadFunc_Macro__
-int init_queue_tw(TWQ *pq);
+int init_queue_tw(TWQ *pq, int n);
 
 __OffloadFunc_Macro__
 int enqueue_tw(TWQ *pq, int ta, int tb, double theta);

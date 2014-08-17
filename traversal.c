@@ -10,7 +10,7 @@ __OffloadVar_Macro__
 static Node *tree; // thread number
 
 	__OffloadFunc_Macro__
-int threaded(pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* lower,int* upper, Domain*dp,GlobalParam*gp,void* process(void*))
+int threaded(int nTeam, int nMaster, int nSlave, pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* lower,int* upper, Domain*dp,GlobalParam*gp,void* process(void*))
 {
 	int i,teamid;
 	printf("before threaded\n");
@@ -21,12 +21,15 @@ int threaded(pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int 
 	//	sleep(2);	
 	for (i=ts; i<te+1; i++)
 	{
-		pth[i].blockid = i/NTEAM;
-		pth[i].teamid=i%NTEAM;
+		pth[i].blockid = i/nTeam;
+		pth[i].teamid=i%nTeam;
 		teamid=pth[i].teamid;
-		pth[i].bsize = MASTER+NSLAVE;
+		pth[i].nTeam = nTeam;
+		pth[i].nMaster = nMaster;
+		pth[i].nSlave = nSlave;
+		pth[i].bsize = nMaster+nSlave;
 		pth[i].tid = i;
-		pth[i].tall = NTEAM*(MASTER+NSLAVE);
+		pth[i].tall = nTeam*(nMaster+nSlave);
 		pth[i].PQ_ppnode = &pq[teamid];
 		pth[i].PQ_treewalk = &tq[teamid];
 		pth[i].first=lower[teamid];
@@ -179,7 +182,7 @@ void* teamMaster(void* param)
 	printf("\ncnt = %d\n", cnt);
 
 	PQ_ppnode->tag=0;
-	threaded(thread, pth->mutex, pthArr, NTEAM+NSLAVE*teamid, NTEAM+NSLAVE*(teamid+1)-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, dp,gp,compPP);
+	threaded(pth->nTeam, pth->nMaster, pth->nSlave, thread, pth->mutex, pthArr, pth->nTeam+pth->nSlave*teamid, pth->nTeam+pth->nSlave*(teamid+1)-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, dp,gp,compPP);
 
 	pthread_mutex_lock(&pth->mutex[teamid]);
 	while(PQ_treewalk->length>0)
@@ -343,6 +346,13 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	int In, Jn, Kn;
 	int npart;
 
+	int nTeam_MIC = 60;
+	int nMaster_MIC = 1;
+	int nSlave_MIC = 1;
+	int nTeam_CPU = 16/dp->NumDom;
+	int nMaster_CPU = 1;
+	int nSlave_CPU = 1;
+
 	DomainTree *dtp = dp->domtree;
 	npart = dp->NumPart;
 	int nnode = dtp->NumNode;
@@ -354,7 +364,6 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	part = dp->Part;
 	tree = dp->domtree->tree;
 
-	int tnum=NTEAM*(MASTER+NSLAVE);
 	int myid=dp->rank;
 	int micid=myid%2;
 #ifdef __INTEL_OFFLOAD
@@ -376,6 +385,7 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	in (count[0:Ngrid]) in (off_tag[0:Ngrid]) \
 	in (off_rc[0:Ngrid]) in (off_pi[0:Ngrid]) in (off_nump[0:Ngrid])
 	{
+		int tnum=nTeam_MIC * (nMaster_MIC + nSlave_MIC);
 		// Processing offload array pointers.
 		DomainTree dt;
 		Domain d;
@@ -408,28 +418,28 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 
 		pth = (Block*)malloc(sizeof(Block)*tnum);
 		thread = (pthread_t*)malloc(sizeof(pthread_t)*tnum);
-		mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*NTEAM);
-		P_PQ_ppnode=(PPQ*)malloc(sizeof(PPQ)*NTEAM);
-		P_PQ_treewalk=(TWQ*)malloc(sizeof(TWQ)*NTEAM);
+		mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*nTeam_MIC);
+		P_PQ_ppnode=(PPQ*)malloc(sizeof(PPQ)*nTeam_MIC);
+		P_PQ_treewalk=(TWQ*)malloc(sizeof(TWQ)*nTeam_MIC);
 
 		initGlobal(part, tree);
 		printf("Init queue ppnode.\n");
-		init_queue_pp(P_PQ_ppnode);
+		init_queue_pp(P_PQ_ppnode, nTeam_MIC);
 		printf("Init queue treewalk.\n");
-		init_queue_tw(P_PQ_treewalk);
+		init_queue_tw(P_PQ_treewalk, nTeam_MIC);
 
 		printf("real domain In-2:%d, Jn-2:%d, Kn-2:%d\n", In-2, Jn-2, Kn-2);
 		int *accum,*lower,*upper,*numpart;
 		int accum_thread;
-		accum_thread=npart/NTEAM;
+		accum_thread=npart/nTeam_MIC;
 		accum=(int*)malloc(sizeof(int)*Ngrid);
 		accum[0]=count[0];
 		for (n=1; n<Ngrid; n++) {
 			accum[n] = accum[n-1] + count[n];
 		}
-		lower = (int*)malloc(sizeof(int)*NTEAM);
-		upper = (int*)malloc(sizeof(int)*NTEAM);
-		numpart = (int*)malloc(sizeof(int)*NTEAM);
+		lower = (int*)malloc(sizeof(int)*nTeam_MIC);
+		upper = (int*)malloc(sizeof(int)*nTeam_MIC);
+		numpart = (int*)malloc(sizeof(int)*nTeam_MIC);
 
 		lower[0] = 0;
 		for (m=1, n=0; n<Ngrid; n++) {
@@ -438,19 +448,19 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 				m++;
 			}
 		}
-		upper[NTEAM-1]=Ngrid;
+		upper[nTeam_MIC-1]=Ngrid;
 
 		numpart[0] = accum[upper[0]-1];
-		for (m=1; m<NTEAM; m++) {
+		for (m=1; m<nTeam_MIC; m++) {
 			numpart[m] = accum[upper[m]-1] - accum[lower[m]-1];
 			printf("[%d]: Lower[%d]=%d, Upper[%d]=%d.\n", d.rank, m, lower[m], m, upper[m]);
 		}
-		for (m=0; m<NTEAM; m++)
+		for (m=0; m<nTeam_MIC; m++)
 		{
 			pthread_mutex_init(&mutex[m], NULL);
 		}
 		printf("before teamMaster\n");	
-		threaded(thread, mutex, pth, 0, NTEAM-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, &d, gp,teamMaster);
+		threaded(nTeam_MIC, nMaster_MIC, nSlave_MIC, thread, mutex, pth, 0, nTeam_MIC-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, &d, gp,teamMaster);
 		printf("after teamMaster\n");	
 		for (i=0; i<tnum; i++)
 		{
@@ -459,6 +469,7 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 		}	
 	}
 #else
+	int tnum=nTeam_CPU * (nMaster_CPU + nSlave_CPU);
 	TWQ *P_PQ_treewalk;
 	PPQ *P_PQ_ppnode;
 
@@ -468,29 +479,29 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 
 	pth = (Block*)malloc(sizeof(Block)*tnum);
 	thread = (pthread_t*)malloc(sizeof(pthread_t)*tnum);
-	mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*NTEAM);
-	P_PQ_ppnode=(PPQ*)malloc(sizeof(PPQ)*NTEAM);
-	P_PQ_treewalk=(TWQ*)malloc(sizeof(TWQ)*NTEAM);
+	mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t)*nTeam_CPU);
+	P_PQ_ppnode=(PPQ*)malloc(sizeof(PPQ)*nTeam_CPU);
+	P_PQ_treewalk=(TWQ*)malloc(sizeof(TWQ)*nTeam_CPU);
 
 	initGlobal(part, tree);
 	printf("Init queue ppnode.\n");
-	init_queue_pp(P_PQ_ppnode);
+	init_queue_pp(P_PQ_ppnode, nTeam_CPU);
 	printf("Init queue treewalk.\n");
-	init_queue_tw(P_PQ_treewalk);
+	init_queue_tw(P_PQ_treewalk, nTeam_CPU);
 
 	printf("real domain In-2:%d, Jn-2:%d, Kn-2:%d\n", In-2, Jn-2, Kn-2);
 	int *accum,*lower,*upper,*numpart;
 	int accum_thread;
 	int* count=(dp->cuboid)->count;
-	accum_thread=npart/NTEAM;
+	accum_thread=npart/nTeam_CPU;
 	accum=(int*)malloc(sizeof(int)*Ngrid);
 	accum[0]=count[0];
 	for (n=1; n<Ngrid; n++) {
 		accum[n] = accum[n-1] + count[n];
 	}
-	lower = (int*)malloc(sizeof(int)*NTEAM);
-	upper = (int*)malloc(sizeof(int)*NTEAM);
-	numpart = (int*)malloc(sizeof(int)*NTEAM);
+	lower = (int*)malloc(sizeof(int)*nTeam_CPU);
+	upper = (int*)malloc(sizeof(int)*nTeam_CPU);
+	numpart = (int*)malloc(sizeof(int)*nTeam_CPU);
 
 	lower[0] = 0;
 	for (m=1, n=0; n<Ngrid; n++) {
@@ -499,18 +510,18 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 			m++;
 		}
 	}
-	upper[NTEAM-1]=Ngrid;
+	upper[nTeam_CPU-1]=Ngrid;
 
 	numpart[0] = accum[upper[0]-1];
-	for (m=1; m<NTEAM; m++) {
+	for (m=1; m<nTeam_CPU; m++) {
 		numpart[m] = accum[upper[m]-1] - accum[lower[m]-1];
 	}
-	for (m=0; m<NTEAM; m++)
+	for (m=0; m<nTeam_CPU; m++)
 	{
 		pthread_mutex_init(&mutex[m], NULL);
 	}
 	printf("before teamMaster\n");	
-	threaded(thread, mutex, pth, 0, NTEAM-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, dp,gp,teamMaster);
+	threaded(nTeam_CPU, nMaster_CPU, nSlave_CPU, thread, mutex, pth, 0, nTeam_CPU-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, dp,gp,teamMaster);
 	printf("after teamMaster\n");	
 	for (i=0; i<tnum; i++)
 	{
