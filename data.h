@@ -13,6 +13,8 @@
 #include <stdint.h>
 #include <mpi.h>
 #include <pthread.h>
+#include "offload.h"
+#include "fillcurve.h"
 
 #define TAG_IDLEFIELD -4
 #define TAG_ADJOINING  0 // will be set to positive int as domain rank
@@ -27,11 +29,10 @@
 
 #define DIM 3
 typedef float real;   // persicion switch
-typedef uint32_t count;
-typedef real vect3d[DIM];
 
-#include "fillcurve.h"
-#include "offload.h"
+typedef uint32_t count;
+
+typedef real vect3d[DIM];
 
 typedef struct {
     long int ID; // constant particle ID
@@ -74,7 +75,8 @@ typedef struct {
 
 typedef struct {
     int NumTree;
-    int *root_tree; // as long as subcuboid, record the root index
+	int NumNode;
+//    int *root_tree; // as long as subcuboid, record the root index
     int *root_cell;
     Node *tree;
 	int *partidxes; // Cao! to indicate the particle position.

@@ -20,7 +20,9 @@
 #define _DTIME_H_
 
 #include <sys/time.h>
+#include "offload.h"
 
+__OffloadFunc_Macro__
 double dtime();
 
 #endif

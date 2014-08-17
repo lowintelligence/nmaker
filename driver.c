@@ -73,9 +73,9 @@ void driver(void) {
 //	convolution_gravity(&taskparam);
 
     
-    pthread_create(&taskmesh, NULL, convolution_gravity, &taskparam);
+//    pthread_create(&taskmesh, NULL, convolution_gravity, &taskparam);
 //    
-    pthread_join(taskmesh, NULL);
+//    pthread_join(taskmesh, NULL);
     tstop = dtime();
     ttime = tstop - tstart;
   printf("time A6 PM:%lf\n",ttime);

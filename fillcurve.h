@@ -1,5 +1,6 @@
 #ifndef FILLCURVE_H
 #define FILLCURVE_H
+#include "offload.h"
 
 typedef long long int code;
 

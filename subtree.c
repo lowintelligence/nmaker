@@ -6,7 +6,7 @@ static Body *part;
 static Node *tree;
 
 
-static int factor_part_node= 2;
+static double factor_part_node = 0.5;
 // new space to build tree as a uint to sent to the other domain or node
 // build top-subtree
 // the tree must be smoothed during tree-traveral
@@ -315,7 +315,7 @@ void packing_group(Domain *dp) {
 	int i;
 	float j,k;
 	Node* ptree=tree;
-	int node_length=(dp->NumPart)/factor_part_node+1<<(MIN_TREE_LEVEL*3)+1;
+	int node_length=(int)((double)dp->NumPart*factor_part_node)+1<<(MIN_TREE_LEVEL*3)+1;
 	for(i=dp->NumPart;i<node_length+dp->NumPart;i++)
 		if(tree[i].nPart==2){
 			//printf("center=%lf,%lfd,%lf,width=%f,npart=%d\n",tree[i].masscenter[0],tree[i].masscenter[1],tree[i].masscenter[2],tree[i].width,tree[i].nPart);
@@ -330,8 +330,6 @@ void packing_group(Domain *dp) {
 void free_domaintree(DomainTree *dtp)
 {
     if ( NULL != dtp) {
-        if ( NULL != dtp->root_tree)
-            free(dtp->root_tree);
         if ( NULL != dtp->root_cell)
             free(dtp->root_cell);
 
@@ -723,13 +721,13 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
     DomainTree *dtp = dp->domtree;
     dtp->NumTree = nThread;
 
-    dtp->root_tree = (int*)malloc(sizeof(int)*index_length );
     dtp->root_cell = (int*)malloc(sizeof(int)*index_length );
 
     /* allocate space for subtree */
-    node_length = (int) ( (dp->NumPart) / factor_part_node + index_length*((1<<(MIN_TREE_LEVEL*3) + 1)));
+    node_length = (int) ((double)dp->NumPart * factor_part_node) + index_length*((1<<(MIN_TREE_LEVEL*3) + 1));
 
     dtp->tree = (Node*)malloc(sizeof(Node)*node_length);
+	dtp->NumNode = node_length;
 
     for (n=0; n<node_length; n++) {
         dtp->tree[n].nPart = 0;
@@ -757,7 +755,6 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
         */
 
     for (i=0, m=0; i<index_length; i++) {
-        dtp->root_tree[i] = m;//this grid is belong to which thread? 
         dtp->root_cell[i] = -1;
         if (i==upper[m])
             m++;
@@ -798,7 +795,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
 	
 	dtp->root_cell[0] = 0;
     for (i=1; i<Ngrid; i++){ 
-        dtp->root_cell[i] = dtp->root_cell[i-1]+dtp->numparticles[i-1]/factor_part_node+(1<<(MIN_TREE_LEVEL*3))+1;
+        dtp->root_cell[i] = dtp->root_cell[i-1]+(int)((double)dtp->numparticles[i-1]*factor_part_node)+(1<<(MIN_TREE_LEVEL*3))+1;
 	}
 
 /*	printf("nSide=%d,%d,%d",dp->cuboid->nSide[0],dp->cuboid->nSide[1],dp->cuboid->nSide[2]);
@@ -822,7 +819,7 @@ void build_subtree_on_subcuboid(Domain *dp, GlobalParam *gp, int nThread) {
         buildsub[q].upper = upper[q];
         buildsub[q].npart = npart[q];
         buildsub[q].first = first_node ;
-        buildsub[q].length= (int) ( (dp->NumPart) / factor_part_node + index_length*((1<<(MIN_TREE_LEVEL*3) + 1)));//node_length
+        buildsub[q].length= dtp->NumNode;//node_length
         buildsub[q].totpart = dp->NumPart;
 //        buildsub[q].tree  = &(dtp->tree[q]);
         buildsub[q].root_cell = dtp->root_cell; //???

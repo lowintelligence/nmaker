@@ -4,19 +4,26 @@ HEADERS=data.h domain.h driver.h fillcurve.h offload.h parameter.h partition.h p
 OBJS_CPU=domain.o driver.o fillcurve.o parameter.o partition.o partmesh.o ppkernel.o queue.o scheduler.o snapshot.o subcuboid.o subtree.o traversal.o
 OBJS_MIC=domain.om driver.om fillcurve.om parameter.om partition.om partmesh.om ppkernel.om queue.om scheduler.om snapshot.om subcuboid.om subtree.om traversal.om
 
-OPENMP=-openmp
+#OPENMP=-openmp
+OPENMP=
+#PAPI=-D__PAPI -I/opt/experf/papi-5.3.2/include /opt/experf/papi-5.3.2/lib/libpapi.a
+PAPI=
 OMP_NUM_THREADS ?= 4
 KMP_AFFINITY ?= compact
 NUM_PROCS ?= 4
+NO_OFFLOAD=
+#NO_OFFLOAD=-no-offload
+STATIC=
+#STATIC=-static_mpi
 
 CC=mpiicc
 MICCC=icc
-CFLAGS=-xHost -fimf-domain-exclusion=15 -O3 $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer 
+CFLAGS=$(STATIC) -xHost -fimf-domain-exclusion=15 -O3 $(OPENMP) $(NO_OFFLOAD) -g -traceback -Bdynamic -fno-omit-frame-pointer 
 CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer
 INC=-I/opt/intel/mkl/include/fftw
 
 LD=mpiicc
-LDFLAGS=-L/opt/intel/mkl/lib/intel64 -lfftw2x_cdft_SINGLE_lp64 -lmkl_cdft_core -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -traceback -Bdynamic -fno-omit-frame-pointer
+LDFLAGS=$(STATIC) -L/opt/intel/mkl/lib/intel64 -lfftw2x_cdft_SINGLE_lp64 -lmkl_cdft_core -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -traceback -Bdynamic -fno-omit-frame-pointer
 
 run: $(PROG)
 	OMP_NUM_THREADS=$(OMP_NUM_THREADS) \
@@ -26,17 +33,23 @@ run: $(PROG)
 n: $(PROG)
 
 $(PROG): $(OBJS_CPU)
-	$(LD) -o $(PROG) $(OBJS_CPU) $(LDFLAGS) $(OPENMP)
+	$(LD) -o $(PROG) $(OBJS_CPU) $(LDFLAGS) $(OPENMP) $(NO_OFFLOAD)
 
 pp: ppkernel.o
-	$(CC) -o pp9 pp9.c ppkernel.o $(CFLAGS)
+	$(CC) -o pp9 pp9.c ppkernel.o $(CFLAGS) $(PAPI) $(NO_OFFLOAD)
+
+ppm: ppkernel.o
+	$(CC) -o pp9m pp9m.c ppkernel.o $(CFLAGS) $(PAPI) $(NO_OFFLOAD)
 
 ppmic: ppkernel.om
 	$(MICCC) -o pp9.mic pp9.c ppkernel.om $(CFLAGSMIC)
 
+ppmmic: ppkernel.om
+	$(MICCC) -o pp9m.mic pp9m.c ppkernel.om $(CFLAGSMIC)
+
 .PHONY:clean
 clean:
-	rm -rf *.o *.om $(PROG) pp9 pp9.mic
+	rm -rf *.o *.om $(PROG) pp9 pp9.mic pp9m pp9m.mic *.dbg
 
 .SUFFIXES: .c .o .om
 

@@ -33,13 +33,12 @@
 #include "offload.h"
 #include <pthread.h>
 
-#define NTEAM   8
+#define NTEAM   60
 #define MASTER  1
 #define NSLAVE  1
 
 #define QUEUE_BLOCK_SIZE 16777216
 
-__OffloadVar_Macro__
 typedef struct
 {
 	int TA;
@@ -47,7 +46,6 @@ typedef struct
 	int mask;
 } PPelement;
 
-__OffloadVar_Macro__
 typedef struct
 {
 	int size;
@@ -74,9 +72,8 @@ __OffloadFunc_Macro__
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask);
 
 __OffloadFunc_Macro__
-int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC);
+int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex);
 
-__OffloadVar_Macro__
 typedef struct
 {
 	int TA;
@@ -84,7 +81,6 @@ typedef struct
 	double theta;
 } TWelement;
 
-__OffloadVar_Macro__
 typedef struct
 {
 	int size;
@@ -112,6 +108,7 @@ typedef struct _block
 	GlobalParam* gp;
 
 	pthread_t* thread;
+	pthread_mutex_t *mutex;
 	struct _block* pthArr;
 	int* lower;
 	int* upper;
@@ -141,5 +138,3 @@ int ProcessQP_Cell(TWQ *PQ_treewalk, PPQ *PQ_ppnode, int process(int, int, doubl
 __OffloadFunc_Macro__
 void initGlobal(Body* p, Node* t);
 #endif
-
-

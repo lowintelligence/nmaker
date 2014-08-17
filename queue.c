@@ -35,12 +35,13 @@ __OffloadFunc_Macro__
 int init_queue_pp(PPQ *p_pq)
 {
 	int i;
-	for(i=0;i<NTEAM;i++){
-	p_pq[i].size = QUEUE_BLOCK_SIZE;
-	p_pq[i].length = 0;
-	p_pq[i].head = 0;
-	p_pq[i].tail = 0;
-	p_pq[i].elements = (PPelement*)malloc(sizeof(PPelement)*p_pq[i].size);
+	for(i=0;i<NTEAM;i++)
+	{
+		p_pq[i].size = QUEUE_BLOCK_SIZE;
+		p_pq[i].length = 0;
+		p_pq[i].head = 0;
+		p_pq[i].tail = 0;
+		p_pq[i].elements = (PPelement*)malloc(sizeof(PPelement)*p_pq[i].size);
 	}
 	return 0;
 }
@@ -92,7 +93,7 @@ int dequeue_pp(PPQ *pq, PPelement *peout)
 		pq->head = (pq->head+1)%pq->size;
 		pq->length--;
 
-		if(pq->length%300000==0)
+		if(pq->length%300000==0 && pq->length>0)
 		{
 			printf("l=%d, TA=%d, nA=%d, TB=%d, nB=%d, mask=%d.\n", pq->length, peout->TA, tree[peout->TA].nPart, peout->TB, tree[peout->TB].nPart, peout->mask);
 		}
@@ -252,12 +253,15 @@ int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask)
 }
 
 __OffloadFunc_Macro__
-int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC)
+int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex)
 {
 	PPelement el;
-	int nA, nB;
+	int nA, nB, dq;
 
-	dequeue_pp(PQ_ppnode, &el);
+	pthread_mutex_lock(mutex);
+	dq = dequeue_pp(PQ_ppnode, &el);
+	pthread_mutex_unlock(mutex);
+	if (dq == -1) return -1;
 //	printf("length=%d, TA=%d, nA=%d, TB=%d, nB=%d, %.2f\n", PQ_ppnode->length, el.TA, tree[el.TA].nPart, el.TB, tree[el.TB].nPart, pC.x[0]);
 //	sleep(3);
 
