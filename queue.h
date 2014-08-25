@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "data.h"
+#include "dtime.h"
 #include "domain.h"
 #include "subtree.h"
 #include "parameter.h"
@@ -33,7 +34,7 @@
 #include "offload.h"
 #include <pthread.h>
 
-#define QUEUE_BLOCK_SIZE 16777216
+#define QUEUE_BLOCK_SIZE 4194304
 
 typedef struct
 {
@@ -53,6 +54,12 @@ typedef struct
 } PPQ;
 
 __OffloadFunc_Macro__
+int packarray3(Body* pp, int n, Array3 pa);
+
+__OffloadFunc_Macro__
+int pusharray3(Body* pp, int n, Array3 pa);
+
+__OffloadFunc_Macro__
 int init_queue_pp(PPQ *pq, int n);
 
 __OffloadFunc_Macro__
@@ -68,7 +75,11 @@ __OffloadFunc_Macro__
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask);
 
 __OffloadFunc_Macro__
-int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex);
+#if BIGQUEUE
+double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex);
+#else
+double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC);
+#endif
 
 typedef struct
 {

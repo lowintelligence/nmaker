@@ -1,0 +1,16 @@
+
+***********************************************
+Changes from last update to August 25, 2014:
+-----------------------------------------------
+    1. A new balanced tree processing method with mutex lock, mixed with the old source, switching by the 'BIGQUEUE' define in 'data.h'.
+    2. Host co-operation with MIC, using 'split' to make the static load balancing.
+    3. Data copy back, with file checking (file output was commented now).
+    4. Warming process for data transfering.
+    5. Eliminated the bug on subcuboid construction.
+    6. Border particles processing and corresponding balancing strategy fixing.
+    7. Moving the PM procedure to former place of border particles processing.
+    8. Thread affinity (commented yet because harmful to performance now).
+    9. More timing triggers.
+   10. Seperated ppkernel testing, vector alignment pragma added.
+   11. Makefile modification.
+***********************************************

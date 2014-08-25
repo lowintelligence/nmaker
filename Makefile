@@ -1,8 +1,8 @@
 PROG=nmaker
 
-HEADERS=data.h domain.h driver.h fillcurve.h offload.h parameter.h partition.h partmesh.h ppkernel.h queue.h scheduler.h snapshot.h subcuboid.h subtree.h traversal.h
-OBJS_CPU=domain.o driver.o fillcurve.o parameter.o partition.o partmesh.o ppkernel.o queue.o scheduler.o snapshot.o subcuboid.o subtree.o traversal.o
-OBJS_MIC=domain.om driver.om fillcurve.om parameter.om partition.om partmesh.om ppkernel.om queue.om scheduler.om snapshot.om subcuboid.om subtree.om traversal.om
+HEADERS=data.h domain.h driver.h fillcurve.h offload.h parameter.h partition.h partmesh.h ppkernel.h queue.h scheduler.h snapshot.h stepping.h subcuboid.h subtree.h traversal.h
+OBJS_CPU=domain.o driver.o fillcurve.o parameter.o partition.o partmesh.o ppkernel.o queue.o scheduler.o snapshot.o stepping.o subcuboid.o subtree.o traversal.o
+OBJS_MIC=domain.om driver.om fillcurve.om parameter.om partition.om partmesh.om ppkernel.om queue.om scheduler.om snapshot.om stepping.om subcuboid.om subtree.om traversal.om
 
 #OPENMP=-openmp
 OPENMP=
@@ -35,17 +35,17 @@ n: $(PROG)
 $(PROG): $(OBJS_CPU)
 	$(LD) -o $(PROG) $(OBJS_CPU) $(LDFLAGS) $(OPENMP) $(NO_OFFLOAD)
 
-pp: ppkernel.o
-	$(CC) -o pp9 pp9.c ppkernel.o $(CFLAGS) $(PAPI) $(NO_OFFLOAD)
+pp: ppkernel.omp.o
+	$(CC) -openmp -o pp9 pp9.c ppkernel.omp.o $(CFLAGS) $(PAPI) $(NO_OFFLOAD)
 
-ppm: ppkernel.o
-	$(CC) -o pp9m pp9m.c ppkernel.o $(CFLAGS) $(PAPI) $(NO_OFFLOAD)
+ppm: ppkernel.omp.o
+	$(CC) -openmp -o pp9m pp9m.c ppkernel.omp.o $(CFLAGS) $(PAPI) $(NO_OFFLOAD)
 
-ppmic: ppkernel.om
-	$(MICCC) -o pp9.mic pp9.c ppkernel.om $(CFLAGSMIC)
+ppmic: ppkernel.omp.om
+	$(MICCC) -openmp -o pp9.mic pp9.c ppkernel.omp.om $(CFLAGSMIC)
 
-ppmmic: ppkernel.om
-	$(MICCC) -o pp9m.mic pp9m.c ppkernel.om $(CFLAGSMIC)
+ppmmic: ppkernel.omp.om
+	$(MICCC) -openmp -o pp9m.mic pp9m.c ppkernel.omp.om $(CFLAGSMIC)
 
 .PHONY:clean
 clean:
@@ -53,11 +53,14 @@ clean:
 
 .SUFFIXES: .c .o .om
 
+ppkernel.omp.o: ppkernel.omp.c
+	$(CC) $(CFLAGS) $(INC) -openmp -c ppkernel.omp.c
+
 .c.o:
 	$(CC) $(CFLAGS) $(INC) -c $<
 
 .c.om:
-	$(MICCC) $(CFLAGSMIC) $(INC) -o $*.om -c $<
+	$(MICCC) $(CFLAGSMIC) $(INC) -openmp -o $*.om -c $<
 
 domain.o: domain.c domain.h data.h fillcurve.h offload.h snapshot.h parameter.h
 driver.o: driver.c driver.h parameter.h partition.h domain.h data.h fillcurve.h offload.h snapshot.h partmesh.h
@@ -69,12 +72,14 @@ partition.o: partition.c partition.h domain.h data.h fillcurve.h offload.h snaps
 partmesh.o: partmesh.c partmesh.h data.h fillcurve.h offload.h parameter.h domain.h snapshot.h
 pp9.o: pp9.c ppkernel.h offload.h
 ppkernel.o: ppkernel.c ppkernel.h offload.h
+ppkernel.omp.o: ppkernel.omp.c ppkernel.h offload.h
 queue.o: queue.c queue.h data.h fillcurve.h offload.h domain.h snapshot.h subtree.h parameter.h subcuboid.h ppkernel.h
 scheduler.o: scheduler.c scheduler.h data.h fillcurve.h offload.h domain.h snapshot.h parameter.h
 snapshot.o: snapshot.c snapshot.h data.h fillcurve.h offload.h
+stepping.o: stepping.c stepping.h data.h offload.h
 subcuboid.o: subcuboid.c subcuboid.h data.h fillcurve.h offload.h parameter.h domain.h snapshot.h
 subtree.o: subtree.c subtree.h domain.h data.h fillcurve.h offload.h snapshot.h parameter.h dtime.h
 traversal.o: traversal.c traversal.h data.h fillcurve.h offload.h domain.h snapshot.h subtree.h parameter.h subcuboid.h ppkernel.h queue.h
 
 pp9.om: pp9.c ppkernel.h offload.h
-ppkernel.om: ppkernel.c ppkernel.h offload.h
+ppkernel.omp.om: ppkernel.omp.c ppkernel.h offload.h

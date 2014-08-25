@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <malloc.h>
-//#include <omp.h>
+#include <omp.h>
 
 #include "ppkernel.h"
 //#include "dtime.h"
@@ -21,14 +21,14 @@ double dtime()
 
 int get_block_tnum(int bid)
 {
-//	return omp_get_num_threads();
-	return 1;
+	return omp_get_num_threads();
+//	return 1;
 }
 
 int get_block_tid(int bid)
 {
-//	return omp_get_thread_num();
-	return 0;
+	return omp_get_thread_num();
+//	return 0;
 }
 
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
@@ -64,7 +64,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 
 //    tstart = dtime();
 
-//#pragma omp parallel
+#pragma omp parallel
 	{
 		int j, k, m, nb, mb, nt, mt, tid, tnum;
 
@@ -271,7 +271,6 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 
 					if ( mt == lb ) // No unrolling at the last B block
 					{
-#pragma vector aligned
 #pragma ivdep
 #ifdef __MULTI_THREAD_
 						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
@@ -297,7 +296,6 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 					}
 					else // Unrolling
 					{
-#pragma vector aligned
 #pragma ivdep
 #ifdef __MULTI_THREAD_
 						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
@@ -455,7 +453,7 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 
 //    tstart = dtime();
 
-//#pragma omp parallel
+#pragma omp parallel
 	{
 		int j, k, m, nb, mb, nt, mt, tid, tnum;
 
@@ -505,7 +503,6 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 							ay2=0;
 							az2=0;
 
-#pragma vector aligned
 #pragma ivdep
 #ifdef __MULTI_THREAD_
 							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
@@ -661,7 +658,6 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 
 					if ( mt == lb ) // No unrolling at the last B block
 					{
-#pragma vector aligned
 #pragma ivdep
 #ifdef __MULTI_THREAD_
 						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
@@ -687,7 +683,6 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 					}
 					else // Unrolling
 					{
-#pragma vector aligned
 #pragma ivdep
 #ifdef __MULTI_THREAD_
 						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)

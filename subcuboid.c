@@ -13,8 +13,8 @@ SubCuboid* get_frame_subcuboid(Domain* dp, GlobalParam *gp, int npad, int nbits)
     code cubekey;
     code lower, upper;
     double boxsize = gp->BoxSize;
-    double nbox_boxsize = (double)(1<<nbits)/boxsize;
-    unsigned long int npart = dp->NumPart;
+    double nbox_boxsize = (1<<nbits)/boxsize;
+    int npart = dp->NumPart;
     real minreal[3], maxreal[3];
     Body *part = dp->Part;
     SubCuboid *sub;
@@ -44,7 +44,7 @@ SubCuboid* get_frame_subcuboid(Domain* dp, GlobalParam *gp, int npad, int nbits)
 #endif
     }
 
-    sub = (SubCuboid*) malloc( sizeof(SubCuboid) );
+    sub = (SubCuboid*) malloc(sizeof(SubCuboid) );
     sub->nPadding = npad;
     sub->nBits = nbits;
 
@@ -66,11 +66,13 @@ SubCuboid* get_frame_subcuboid(Domain* dp, GlobalParam *gp, int npad, int nbits)
 }
 
 /***************** identify the cuboid within boundary *******************/
-void mark_cuboid(Domain *dp, SubCuboid *sub)
+void mark_cuboid(Domain *dp, SubCuboid *sub, int meshbits)
 {
     int n, m, i, j, k;
     int x, y, z, X, Y, Z, idx, Idx, cnt;
     int In, Jn, Kn;
+    int MeshSide = (1<<meshbits);
+
     int minidx[3];
     int maxidx[3];
     int nside[3];
@@ -88,9 +90,7 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
     }
 //    printf("npad = %d , nbits = %d\n", npad, nbits);
 
-    printf(" - min : %d %d %d\n", minidx[0], minidx[1], minidx[2]);
-    printf(" - max : %d %d %d\n", maxidx[0], maxidx[1], maxidx[2]);
-    printf(" nside : %d %d %d\n", nside[0], nside[1], nside[2]);
+
     In = nside[0];
     Jn = nside[1];
     Kn = nside[2];
@@ -102,6 +102,11 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
     lower = dp->thisdom->LowerHilbertKey;
     upper = dp->thisdom->UpperHilbertKey;
 
+    printf(" - min : %d %d %d\n", minidx[0], minidx[1], minidx[2]);
+    printf(" - max : %d %d %d\n", maxidx[0], maxidx[1], maxidx[2]);
+    printf(" nside : %d %d %d\n", nside[0], nside[1], nside[2]);
+    printf(" lower = %d, upper = %d\n", lower, upper);
+
     for ( i=0; i<In; i++ ) {
         for ( j=0; j<Jn; j++ ) {
             for ( k=0; k<Kn; k++ ) {
@@ -111,9 +116,31 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
                 idx = ( i*Jn + j )*Kn + k;
                 sub->count[idx] = 0;
                 sub->tag[idx] = TAG_IDLEFIELD;
-                if ( i<npad || i>(In-npad-1)
-                        || j<npad || j>(Jn-npad-1)
-                        || k<npad || k>(Kn-npad-1) ) {
+
+                if ( i<npad || i>(In-npad-1) || j<npad || j>(Jn-npad-1) || k<npad || k>(Kn-npad-1) ) {
+                    label[idx] = 0;
+                    if ( i<npad || i>(In-npad-1) )
+                        x = (x+MeshSide)%MeshSide;
+                    if ( j<npad || j>(Jn-npad-1) )
+                        y = (y+MeshSide)%MeshSide;
+                    if ( k<npad || k>(Kn-npad-1) )
+                        z = (z+MeshSide)%MeshSide;
+                    cdkey[idx] = coding_3d_filling_curve(x, y, z, nbits);
+                }
+                else {
+                    cubekey = coding_3d_filling_curve(x, y, z, nbits);
+                    if ( cubekey>=lower && cubekey<upper )
+                        label[idx] = 1 ;
+                    else
+                        label[idx] = 0 ;
+
+                    cdkey[idx] = cubekey;
+
+                }
+
+
+/*  
+				if ( i<npad || i>(In-npad-1) || j<npad || j>(Jn-npad-1) || k<npad || k>(Kn-npad-1) ) {{
                     label[idx] = 0;
                     x = (x+In)%In;
                     y = (y+Jn)%Jn;
@@ -127,7 +154,10 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
                     else
                         label[idx] = 0 ;
 
+                    cdkey[idx] = cubekey;
+
                 }
+*/
             }
         }
     }
@@ -225,11 +255,41 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
     }
 
 
+/*
+ ///////////////////////   
+        int myrank;
+        MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
+        char fnameout[100];
+        sprintf(fnameout, "test_adjoining_%d", myrank);
+            FILE *fd;
+            //  assert(fd=fopen("test_boundary_label.dat", "w")) ;
+            assert(fd=fopen(fnameout, "w")) ;
+            for ( i=0; i<In; i++) {
+                for ( j=0; j<Jn; j++) {
+                    for ( k=0; k<Kn; k++) {
+                        //              fprintf(fd, "%d ", label[ (i*Jn+j)*Kn + k] );
+                        fprintf(fd, "%2d ", sub->tag[ (i*Jn+j)*Kn + k ] );
+                    }
+                    fprintf(fd, "\n");
+                }
+                fprintf(fd, "\n");
+            }
+            fclose(fd);
+       
+
+/////////////////////
+*/
+    
+
+
+
+
+
     int nSplit, nLevel, splitLength;
     nSplit = dp->NumDom;
     for (nLevel = 0; nSplit > (1<<nLevel); nLevel++);
     splitLength = 1<<nLevel;
-    code *split = (code*) malloc( sizeof(code) * splitLength );
+    code *split = (code*) malloc(sizeof(code) * splitLength );
 
 //   printf("nSplit = %d nLevel = %d\n", nSplit, nLevel);
     for (i=0; i<splitLength; i++) {
@@ -248,7 +308,7 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
         for ( j=0; j<Jn; j++) {
             for ( k=0; k<Kn; k++) {
                 idx = (i*Jn+j)*Kn + k ;
-                if ( TAG_ADJOINING == sub->tag[idx]  ) {
+                if ( TAG_ADJOINING == sub->tag[idx] ) {
 
                     cubekey = cdkey[idx];
 
@@ -276,13 +336,13 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
     }
 
     free(split);
-    /*
-        int myrank;
-        MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
-        if (myrank == 0) {
-            FILE *fd;
-            //  assert(fd=fopen("test_boundary_label.dat", "w")) ;
-            assert(fd=fopen("test_boundary_tag.dat", "w")) ;
+
+/*
+ ///////////////////////   
+
+   sprintf(fnameout, "test_boundary_%d", myrank);
+         
+            assert(fd=fopen(fnameout, "w")) ;
             for ( i=0; i<In; i++) {
                 for ( j=0; j<Jn; j++) {
                     for ( k=0; k<Kn; k++) {
@@ -294,9 +354,11 @@ void mark_cuboid(Domain *dp, SubCuboid *sub)
                 fprintf(fd, "\n");
             }
             fclose(fd);
-        }
 
-    */
+
+/////////////////////
+*/
+
     free(label);
     free(cdkey);
 }
@@ -450,7 +512,7 @@ void construct_subcuboid(Domain *dp, GlobalParam *gp)
     SubCuboid* sub;
 
     sub = get_frame_subcuboid(dp, gp, 1, gp->NumBits);
-    mark_cuboid(dp, sub);
+    mark_cuboid(dp, sub, gp->NumBits);
     mark_particle_by_cuboid(sub, dp, gp->BoxSize, gp->NumBits);
 
 //   if ( 0 == dp->rank)

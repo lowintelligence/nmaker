@@ -22,6 +22,18 @@ void driver(void) {
 
     MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+#ifdef __INTEL_OFFLOAD
+	int micid=myid%2;
+	Body *part = malloc(16777216*2/numprocs*sizeof(Body));
+	Node *tree = malloc(8388608*2/numprocs*sizeof(Node));
+#pragma offload target(mic:micid) inout (part[0:16777216*2/numprocs]:alloc_if(1) free_if(1)) inout (tree[0:8388608*2/numprocs]:alloc_if(1) free_if(1)) signal(part)
+	{
+		;
+	}
+#pragma offload_wait target(mic:micid) wait(part)
+	free(part);
+	free(tree);
+#endif
 
     setup_parameters(&allparam);
     print_parameters(&allparam);
@@ -34,6 +46,7 @@ void driver(void) {
     tstop = dtime();
     ttime = tstop - tstart;
   printf("time A0 init:%lf\n",ttime);
+
 	setup_partmesh_environment(&dom, &allparam);
     tstop = dtime();
     ttime = tstop - tstart;
@@ -57,34 +70,28 @@ void driver(void) {
     taskparam.dp = &dom;
     taskparam.gp = &allparam;
 
+    pthread_create(&taskmesh, NULL, convolution_gravity, &taskparam);
+    
+    pthread_join(taskmesh, NULL);
+    tstop = dtime();
+    ttime = tstop - tstart;
+  printf("time A6 PM:%lf\n",ttime);
     pthread_create(&taskcomm, NULL, thread_broad_front, &taskparam);   
 
     pthread_join(taskcomm, NULL);
     tstop = dtime();
     ttime = tstop - tstart;
   printf("time A4 broad front:%lf\n",ttime);
-    
 
     build_subtree_on_subcuboid(&dom, &allparam, allparam.NumThreadPerSocket);
     tstop = dtime();
     ttime = tstop - tstart;
   printf("time A5 subtree:%lf\n",ttime);
-
-//	convolution_gravity(&taskparam);
-
-    
-//    pthread_create(&taskmesh, NULL, convolution_gravity, &taskparam);
-//    
-//    pthread_join(taskmesh, NULL);
-    tstop = dtime();
-    ttime = tstop - tstart;
-  printf("time A6 PM:%lf\n",ttime);
-    
     dtt_traversal(&dom, &allparam);
     tstop = dtime();
     ttime = tstop - tstart;
   printf("time total:%lf\n",ttime);
-//    inner_traversal(&dom, &allparam, allparam.NumThreadPerSocket);
+//	draft_kick_draft_fixed(dom.Part,dom.NumPart,get_stepping_increment(0));
     
 
 }

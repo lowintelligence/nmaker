@@ -107,40 +107,66 @@ void* convolution_gravity(void *param)
         }
     }
     for (d=0; d<3; d++) {
-        mesh_min[d] = (int)pos_min[d]*invdelta;
-        mesh_max[d] = (int)pos_max[d]*invdelta;
+        mesh_min[d] = (int)(pos_min[d]*invdelta);
+        mesh_max[d] = (int)(pos_max[d]*invdelta);
         mesh_nside[d] = 1+(mesh_max[d]-mesh_min[d]+1)+1;
     }
-
+//printf(" %d - -%d %d %d -- %d\n", rank, mesh_nside[0], mesh_nside[1], mesh_nside[2],pm_nside);
     int field_length = mesh_nside[0]*mesh_nside[1]*mesh_nside[2];
     pm_real_field = (real*)malloc(sizeof(real)*field_length );
+    
+ assert(pm_real_field != NULL);
     /* cic */
     for (n=0; n<field_length; n++)
         pm_real_field[n] = 0.0;
 
+//	printf("[%d] %d %d\n", rank, pm_local_start[rank], pm_local_xside[rank]);
+/*
     if (0==rank) {
         for (s=0; s<num_pm_socket; s++)
             printf(" %d  c= [ %d , %d]\n", s, pm_local_start[s], pm_local_start[s] + pm_local_xside[s] - 1);
     }
+*/
+//MPI_Barrier(MPI_COMM_WORLD);
+//exit(0);
+
+
 
     int I,J,K, In, Jn, Kn, NX, NY, NZ;
     real x, y, z, wx, wy, wz, wxn, wyn, wzn;
     NX = mesh_nside[0];
     NY = mesh_nside[1];
     NZ = mesh_nside[2];
+real px, py, pz;
+real pmx, pmy, pmz;
+
+pmx = mesh_min[0]*delta;
+pmy = mesh_min[1]*delta;
+pmz = mesh_min[2]*delta;
+
 
     for (n=0; n<npart; n++) {
-        I = (int)part[n].pos[0]*invdelta - mesh_min[0] + 1;
-        J = (int)part[n].pos[1]*invdelta - mesh_min[1] + 1;
-        K = (int)part[n].pos[2]*invdelta - mesh_min[2] + 1;
+	px = part[n].pos[0] - pmx;
+	py = part[n].pos[1] - pmy;
+	pz = part[n].pos[2] - pmz;
 
+	I = (int)(px*invdelta) + 1;
+	J = (int)(py*invdelta) + 1;
+	K = (int)(pz*invdelta) + 1;
+//        I = (int)(part[n].pos[0]*invdelta) - mesh_min[0] + 1;
+//        J = (int)(part[n].pos[1]*invdelta) - mesh_min[1] + 1;
+//        K = (int)(part[n].pos[2]*invdelta) - mesh_min[2] + 1;
         x = (I + 0.5)*delta;
         y = (J + 0.5)*delta;
         z = (K + 0.5)*delta;
 
-        wxn = (part[n].pos[0] - x)*invdelta;
-        wyn = (part[n].pos[1] - y)*invdelta;
-        wzn = (part[n].pos[2] - z)*invdelta;
+//        wxn = (part[n].pos[0] - x)*invdelta;
+//        wyn = (part[n].pos[1] - y)*invdelta;
+//        wzn = (part[n].pos[2] - z)*invdelta;
+
+        wxn = (px - x)*invdelta;
+        wyn = (py - y)*invdelta;
+        wzn = (pz - z)*invdelta;
 
         if (wxn<0.0) {
             In = I - 1;
@@ -178,8 +204,8 @@ void* convolution_gravity(void *param)
         pm_real_field[(I *NY + Jn)*NZ + Kn] += wx *wyn*wzn;
         pm_real_field[(In*NY + Jn)*NZ + Kn] += wxn*wyn*wzn;
 
-        assert((I *NY + J )*NZ + K < field_length);
-        assert((In*NY + Jn)*NZ + Kn< field_length);
+ //       assert((I *NY + J )*NZ + K < field_length);
+  //      assert((In*NY + Jn)*NZ + Kn< field_length);
     }
 
     mass = 1.0;
@@ -188,9 +214,8 @@ void* convolution_gravity(void *param)
         pm_real_field[n] *= density;
 
 
-
-
-
+//MPI_Barrier(MPI_COMM_WORLD);
+//exit(0);
 
     BuffInfo *sendinfo; // for tree domain;
     BuffInfo *recvinfo; // for pm sockets;
@@ -222,10 +247,10 @@ void* convolution_gravity(void *param)
     ab_xstart = mesh_min[0] - 1;
     ab_xend   = mesh_max[0] + 1;
     cut = 0;
+//MPI_Barrier(MPI_COMM_WORLD);
+//exit(0);
 
-
-    //  if (0==rank)
-    printf(" [%d] ab_xstart =%d ab_xend = %d\n", rank, ab_xstart, ab_xend );
+//    printf(" [%d] ab_xstart =%d ab_xend = %d mesh_nside = %d\n", rank, ab_xstart, ab_xend, mesh_nside[0] );
     if (ab_xstart == -1) {
         s=num_pm_socket - 1;
         width = 1;
@@ -234,20 +259,16 @@ void* convolution_gravity(void *param)
         sendinfo[s].index = 0;
         sendinfo[s].length = width*mesh_nside[1]*mesh_nside[2];
         cut += width;
-        //    if (0==rank)
-        printf(" [%d] s=%d, cut=%d ab_xstart =%d \n", rank,s, cut,ab_xstart );
+  //      printf(" [%d] s=%d, cut=%d ab_xstart =%d \n", rank,s, cut,ab_xstart );
     }
     for (s=0; s<num_pm_socket; s++) {
         s_xstart = pm_local_start[s];
         s_xend   = pm_local_start[s] + pm_local_xside[s] - 1;
 
         ab_xstart = cut + mesh_min[0] - 1;
-        //  if (0==rank)
-        printf(" [%d] s=%d,ab_xstart=%d, s_xstart=%d s_xend =%d cut = %d\n", rank,s, ab_xstart, s_xstart, s_xend, cut);
 
         if (cut == mesh_nside[0] )
             break;
-
         if ( ab_xstart > s_xend)
             continue;
         if ( s_xstart<= ab_xstart && ab_xstart <= s_xend) {
@@ -269,12 +290,14 @@ void* convolution_gravity(void *param)
         sendinfo[s].index = cut*mesh_nside[1]*mesh_nside[2];
         sendinfo[s].length = width*mesh_nside[1]*mesh_nside[2];
         cut += width;
-   //     printf(" [%d] s=%d, cut=%d ab_xstart =%d \n", rank,s, cut,ab_xstart );
+//        printf(" [%d] s=%d, cut=%d ab_xstart =%d \n", rank,s, cut,ab_xstart );
     }
-//    assert(cut == mesh_nside[0] );//Meng!
+
+    assert(cut == mesh_nside[0] );
     ///////////////////
 
-
+//MPI_Barrier(MPI_COMM_WORLD);
+//exit(0);
 
     BuffInfo template;
     MPI_Datatype mpi_buffinfo_type;

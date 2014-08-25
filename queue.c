@@ -253,15 +253,26 @@ int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask)
 }
 
 __OffloadFunc_Macro__
-int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex)
+#if BIGQUEUE
+double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex)
+#else
+double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC)
+#endif
 {
 	PPelement el;
 	int nA, nB, dq;
 
+	double ds, dt;
+	ds = 0.0;
+	dt = dtime();
+#if BIGQUEUE
 	pthread_mutex_lock(mutex);
+#endif
 	dq = dequeue_pp(PQ_ppnode, &el);
+#if BIGQUEUE
 	pthread_mutex_unlock(mutex);
-	if (dq == -1) return -1;
+#endif
+	if (dq == -1) return 0.0;
 //	printf("length=%d, TA=%d, nA=%d, TB=%d, nB=%d, %.2f\n", PQ_ppnode->length, el.TA, tree[el.TA].nPart, el.TB, tree[el.TB].nPart, pC.x[0]);
 //	sleep(3);
 
@@ -282,7 +293,9 @@ int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECT
 		pB.z[0] = tree[el.TB].masscenter[2];
 //		pB.x=pB.y=pB.z=NULL;	
 	}
+	ds += dtime() - dt;
 	process(pA, nA, pB, nB, EPS2, pC);
+	dt = dtime();
 
 	if (el.mask == 1)
 	{	
@@ -290,8 +303,15 @@ int ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECT
 		pC.y[1] *= tree[el.TB].mass;
 		pC.z[2] *= tree[el.TB].mass;
 	}
-
+#if BIGQUEUE
+	pthread_mutex_lock(mutex);
+#endif
 	pusharray3(&part[tree[el.TA].firstpart], nA, pC);
+#if BIGQUEUE
+	pthread_mutex_unlock(mutex);
+#endif
+	ds += dtime() - dt;
+	return ds;
 }
 
 __OffloadFunc_Macro__

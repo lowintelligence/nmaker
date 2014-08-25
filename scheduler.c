@@ -1,6 +1,32 @@
 #include "scheduler.h"
 #include <assert.h>
 
+#define TMPNUM 2097152
+
+int inbox(int x, int y, int z, int *minidx, int *maxidx)
+{
+	int in=0;
+	if (x>=minidx[0]-1 && x<=maxidx[0]+1)
+	{
+		if (y>=minidx[1]-1 && y<=maxidx[1]+1)
+		{
+			if (z>=minidx[2]-1 && z<=maxidx[2]+1)
+			{
+				in = 1;
+			}
+		}
+	}
+//	if (in==1) printf("1");
+	return in;
+}
+
+int getidx(int x, int y, int z, int Jn, int Kn, int *minidx, int npad)
+{
+	int idx;
+	idx = ((x-minidx[0]+npad)*Jn + (y-minidx[1]+npad))*Kn + (z-minidx[2]+npad);
+	return idx;
+}
+
 void broadcast_frontiers(Domain *dp, GlobalParam *gp)
 {
     int i, j, k, n, nb, cntpart, start, idx, dest, In, Jn, Kn, index_length;
@@ -11,7 +37,7 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
     int npart;
     int *numlock, *numpart;
     int *numsend, *numrecv;
-    BuffData **buffsend, **buffrecv;
+	Body **buffsend, **buffrecv;
     Body *part = dp->Part;
     Body *adj_part;
 
@@ -20,8 +46,8 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
     numlock = (int*) malloc(sizeof(int)*nSock);
     numpart = (int*) malloc(sizeof(int)*nSock);
 
-    buffsend = (BuffData**) malloc(sizeof(BuffData*)*nSock);
-    buffrecv = (BuffData**) malloc(sizeof(BuffData*)*nSock);
+    buffsend = (Body**) malloc(sizeof(Body*)*nSock);
+    buffrecv = (Body**) malloc(sizeof(Body*)*nSock);
 
     for (s=0; s<nSock; s++) {
         numpart[s] = 0;
@@ -86,28 +112,26 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
                             for (z=k-1; z<=k+1; z++)  {
                                 dest = tag[(x*Jn+y)*Kn+z];
                                 if ( dest  >= 0 && numlock[dest] ) {
-                                    numsend[dest] += count[idx];
-                                    numlock[dest] = 0;
+									    numsend[dest] += count[idx];
+										numlock[dest] = 0;
 
-                                    active[cnt++] = dest;
-
+										active[cnt++] = dest;
                                 }
-                            }
+							}
 
                     while ( 0< cnt-- )
                         numlock[ active[cnt] ] = 1;
 
                     assert(cnt==-1);
-
-
                 }
             }
-
+    
     for (s=0; s<nSock; s++) {
         printf(" send %10d part(s) from[%d]to[%d]\n", numsend[s], dp->rank, s);
     }
 
     MPI_Alltoall(numsend, 1, MPI_INT, numrecv, 1, MPI_INT, TREE_COMM_WORLD);
+
 
     for (s=0; s<nSock; s++) {
 //        printf(" recv %10d part(s) from[%d]to[%d]\n", numrecv[s], s, dp->rank);
@@ -124,21 +148,27 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
 
     for (s=0; s<nSock; s++) {
         if ( 0<numsend[s] )
-            buffsend[s] = (BuffData*)malloc(sizeof(BuffData) * numsend[s] );
+            buffsend[s] = (Body*)malloc(sizeof(Body) * numsend[s] );
         if ( 0<numrecv[s] )
-            buffrecv[s] = (BuffData*)malloc(sizeof(BuffData) * numrecv[s] );
+            buffrecv[s] = (Body*)malloc(sizeof(Body) * numrecv[s] );
     }
 
     int nbits = gp->NumBits;
+	int Gside = 1<<nbits;
+	int Ngrid = In*Jn*Kn;
     double boxsize = gp->BoxSize;
     double nbox_boxsize = (1<<nbits)/boxsize;
-    double minidx[3], npad;
+    int minidx[3], maxidx[3], npad;
 
-    npad = 1;
+    npart = dp->NumPart;
+	npad = 1;
     minidx[0] = dp->cuboid->minimum[0];
     minidx[1] = dp->cuboid->minimum[1];
     minidx[2] = dp->cuboid->minimum[2];
-    npart = dp->NumPart;
+    maxidx[0] = dp->cuboid->maximum[0];
+    maxidx[1] = dp->cuboid->maximum[1];
+    maxidx[2] = dp->cuboid->maximum[2];
+	
 //printf("%f %f %f\n", part[npart-1].pos[0], part[npart-1].pos[1], part[npart-1].pos[2]);
     MPI_Barrier(TREE_COMM_WORLD);
 
@@ -157,9 +187,7 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
                             //numsend[dest]+= count[idx];
                             nb = numpart[dest];
 
-                            buffsend[dest][nb].pos[0] = part[n].pos[0];
-                            buffsend[dest][nb].pos[1] = part[n].pos[1];
-                            buffsend[dest][nb].pos[2] = part[n].pos[2];
+                            buffsend[dest][nb] = part[n];
 
                             numpart[dest]++;
                             numlock[dest] = 0;
@@ -178,7 +206,7 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
         assert(numpart[s] == numsend[s]);
     }
 
-    int data_btye = sizeof(BuffData);
+    int data_btye = sizeof(Body);
     int rank, recv, send;
     MPI_Status *status;
     MPI_Request *req_send, *req_recv;
@@ -188,7 +216,7 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
     status = (MPI_Status*)malloc(sizeof(MPI_Status)*nSock);
 
     MPI_Datatype mpi_buffdata_type;
-    MPI_Type_contiguous(sizeof(BuffData), MPI_CHAR, &mpi_buffdata_type );
+    MPI_Type_contiguous(sizeof(Body), MPI_CHAR, &mpi_buffdata_type );
     MPI_Type_commit(&mpi_buffdata_type);
 
     rank = dp->rank;
@@ -203,17 +231,783 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
         MPI_Sendrecv(buffsend[send], numsend[send], mpi_buffdata_type, send, 0, buffrecv[recv], numrecv[recv], mpi_buffdata_type, recv, 0, TREE_COMM_WORLD, &status[s]);
     }
 
-    printf(" tot_adjoining_part = %d \n",recv_tot_part );
+    printf("[%d] tot_adjoining_part = %d \n",dp->rank, recv_tot_part );
     cnt = 0;
-    adj_part = (Body*)malloc(sizeof(Body)*recv_tot_part);
+	part = (Body*)realloc((void*)dp->Part,sizeof(Body)*(npart+recv_tot_part+TMPNUM));
+	dp->Part = part;
+//	dp->NumPart += recv_tot_part;
+    adj_part = part + npart;
+
     for (s=0; s<nSock; s++) {
         for (n=0; n<numrecv[s]; n++) {
-            adj_part[cnt].pos[0] = buffrecv[s][n].pos[0];
-            adj_part[cnt].pos[1] = buffrecv[s][n].pos[1];
-            adj_part[cnt].pos[2] = buffrecv[s][n].pos[2];
-            cnt++;
+            adj_part[cnt] = buffrecv[s][n];
+
+			x = (int)(adj_part[cnt].pos[0]*nbox_boxsize);
+			y = (int)(adj_part[cnt].pos[1]*nbox_boxsize);
+			z = (int)(adj_part[cnt].pos[2]*nbox_boxsize);
+			int idx=getidx(x, y, z, Jn, Kn, minidx, npad);
+//			printf("[%d]  box=%f, idx=%d, x=%d, y=%d, z=%d, px=%f, py=%f, pz=%f.\n", dp->rank, 1/nbox_boxsize, idx, x, y, z, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+			int tmpidx;
+			if (x==Gside-1)
+			{
+				if (minidx[0]==0)
+				{
+					tmpidx = getidx(x-Gside, y, z, Jn, Kn, minidx, npad);
+					if (inbox(x-Gside,y,z,minidx,maxidx) && dp->cuboid->tag[tmpidx]>=0)
+					{
+						adj_part[cnt].pos[0] -= boxsize;
+						if(tmpidx>=0 && tmpidx<Ngrid) 
+						{
+							adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+							adj_part[cnt].group = tmpidx;
+							dp->cuboid->count[tmpidx]++;
+							if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						else
+						{
+							printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						cnt++;
+						adj_part[cnt] = buffrecv[s][n];
+					}
+					if (y==Gside-1)
+					{
+						if (minidx[1]==0)
+						{
+							tmpidx = getidx(x-Gside, y-Gside, z, Jn, Kn, minidx, npad);
+							if ((inbox(x-Gside,y-Gside,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+							{
+								adj_part[cnt].pos[0] -= boxsize;
+								adj_part[cnt].pos[1] -= boxsize;
+								if(tmpidx>=0 && tmpidx<Ngrid) 
+								{
+									adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+									adj_part[cnt].group = tmpidx;
+									dp->cuboid->count[tmpidx]++;
+									if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								else
+								{
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								cnt++;
+								adj_part[cnt] = buffrecv[s][n];
+							}
+							if (z==Gside-1)
+							{
+								tmpidx = getidx(x-Gside, y-Gside, z-Gside, Jn, Kn, minidx, npad);
+								if (minidx[2]==0 && (inbox(x-Gside,y-Gside,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] -= boxsize;
+									adj_part[cnt].pos[1] -= boxsize;
+									adj_part[cnt].pos[2] -= boxsize;
+									tmpidx = idx-Gside*Jn*Kn-Gside*Kn-Gside;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+							if(z==0)
+							{
+								tmpidx = getidx(x-Gside, y-Gside, z+Gside, Jn, Kn, minidx, npad);
+								if (maxidx[2]==Gside-1 && (inbox(x-Gside,y-Gside,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] -= boxsize;
+									adj_part[cnt].pos[1] -= boxsize;
+									adj_part[cnt].pos[2] += boxsize;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+						}
+					}
+					if (y==0)
+					{
+						if (maxidx[1]==Gside-1)
+						{
+							tmpidx = getidx(x-Gside, y+Gside, z, Jn, Kn, minidx, npad);
+							if ((inbox(x-Gside,y+Gside,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+							{
+								adj_part[cnt].pos[0] -= boxsize;
+								adj_part[cnt].pos[1] += boxsize;
+								if(tmpidx>=0 && tmpidx<Ngrid) 
+								{
+									adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+									adj_part[cnt].group = tmpidx;
+									dp->cuboid->count[tmpidx]++;
+									if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								else
+								{
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								cnt++;
+								adj_part[cnt] = buffrecv[s][n];
+							}
+							if (z==Gside-1)
+							{
+								tmpidx = getidx(x-Gside, y+Gside, z-Gside, Jn, Kn, minidx, npad);
+								if (minidx[2]==0 && (inbox(x-Gside,y+Gside,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] -= boxsize;
+									adj_part[cnt].pos[1] += boxsize;
+									adj_part[cnt].pos[2] -= boxsize;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+							if(z==0)
+							{
+								tmpidx = getidx(x-Gside, y+Gside, z+Gside, Jn, Kn, minidx, npad);
+								if (maxidx[2]==Gside-1 && (inbox(x-Gside,y+Gside,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] -= boxsize;
+									adj_part[cnt].pos[1] += boxsize;
+									adj_part[cnt].pos[2] += boxsize;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+						}
+					}
+					if (z==Gside-1)
+					{
+						tmpidx = getidx(x-Gside, y, z-Gside, Jn, Kn, minidx, npad);
+						if (minidx[2]==0 && (inbox(x-Gside,y,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[0] -= boxsize;
+							adj_part[cnt].pos[2] -= boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+					if(z==0)
+					{
+						tmpidx = getidx(x-Gside, y, z+Gside, Jn, Kn, minidx, npad);
+						if (maxidx[2]==Gside-1 && (inbox(x-Gside,y,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[0] -= boxsize;
+							adj_part[cnt].pos[2] += boxsize;
+							tmpidx = idx-Gside*Jn*Kn+Gside;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+				}
+			}
+			if (x==0)
+			{
+				if (maxidx[0]==Gside-1)
+				{
+					tmpidx = getidx(x+Gside, y, z, Jn, Kn, minidx, npad);
+					if ((inbox(x+Gside,y,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+					{
+						adj_part[cnt].pos[0] += boxsize;
+						if(tmpidx>=0 && tmpidx<Ngrid) 
+						{
+							adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+							adj_part[cnt].group = tmpidx;
+							dp->cuboid->count[tmpidx]++;
+							if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						else
+						{
+							printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						cnt++;
+						adj_part[cnt] = buffrecv[s][n];
+					}
+					if (y==Gside-1)
+					{
+						if (minidx[1]==0)
+						{
+							tmpidx = getidx(x+Gside, y-Gside, z, Jn, Kn, minidx, npad);
+							if ((inbox(x+Gside,y-Gside,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+							{
+								adj_part[cnt].pos[0] += boxsize;
+								adj_part[cnt].pos[1] -= boxsize;
+								if(tmpidx>=0 && tmpidx<Ngrid) 
+								{
+									adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+									adj_part[cnt].group = tmpidx;
+									dp->cuboid->count[tmpidx]++;
+									if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								else
+								{
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								cnt++;
+								adj_part[cnt] = buffrecv[s][n];
+							}
+							if (z==Gside-1)
+							{
+								tmpidx = getidx(x+Gside, y-Gside, z-Gside, Jn, Kn, minidx, npad);
+								if (minidx[2]==0 && (inbox(x+Gside,y-Gside,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] += boxsize;
+									adj_part[cnt].pos[1] -= boxsize;
+									adj_part[cnt].pos[2] -= boxsize;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+							if(z==0)
+							{
+								tmpidx = getidx(x+Gside, y-Gside, z+Gside, Jn, Kn, minidx, npad);
+								if (maxidx[2]==Gside-1 && (inbox(x+Gside,y-Gside,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] += boxsize;
+									adj_part[cnt].pos[1] -= boxsize;
+									adj_part[cnt].pos[2] += boxsize;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+						}
+					}
+					if (y==0)
+					{
+						if (maxidx[1]==Gside-1)
+						{
+							tmpidx = getidx(x+Gside, y+Gside, z, Jn, Kn, minidx, npad);
+							if ((inbox(x+Gside,y+Gside,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+							{
+								adj_part[cnt].pos[0] += boxsize;
+								adj_part[cnt].pos[1] += boxsize;
+								if(tmpidx>=0 && tmpidx<Ngrid) 
+								{
+									adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+									adj_part[cnt].group = tmpidx;
+									dp->cuboid->count[tmpidx]++;
+									if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								else
+								{
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+								}
+								cnt++;
+								adj_part[cnt] = buffrecv[s][n];
+							}
+							if (z==Gside-1)
+							{
+								tmpidx = getidx(x+Gside, y+Gside, z-Gside, Jn, Kn, minidx, npad);
+								if (minidx[2]==0 && (inbox(x+Gside,y+Gside,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] += boxsize;
+									adj_part[cnt].pos[1] += boxsize;
+									adj_part[cnt].pos[2] -= boxsize;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+							if(z==0)
+							{
+								tmpidx = getidx(x+Gside, y+Gside, z+Gside, Jn, Kn, minidx, npad);
+								if (maxidx[2]==Gside-1 && (inbox(x+Gside,y+Gside,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+								{
+									adj_part[cnt].pos[0] += boxsize;
+									adj_part[cnt].pos[1] += boxsize;
+									adj_part[cnt].pos[2] += boxsize;
+									tmpidx = idx+Gside*Jn*Kn+Gside*Kn+Gside;
+									if(tmpidx>=0 && tmpidx<Ngrid) 
+									{
+										adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+										adj_part[cnt].group = tmpidx;
+										dp->cuboid->count[tmpidx]++;
+										if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+											printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									else
+									{
+										printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+									}
+									cnt++;
+									adj_part[cnt] = buffrecv[s][n];
+								}
+							}
+						}
+					}
+					if (z==Gside-1)
+					{
+						tmpidx = getidx(x+Gside, y, z-Gside, Jn, Kn, minidx, npad);
+						if (minidx[2]==0 && (inbox(x+Gside,y,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[0] += boxsize;
+							adj_part[cnt].pos[2] -= boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+					if(z==0)
+					{
+						tmpidx = getidx(x+Gside, y, z+Gside, Jn, Kn, minidx, npad);
+						if (maxidx[2]==Gside-1 && (inbox(x+Gside,y,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[0] += boxsize;
+							adj_part[cnt].pos[2] += boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+				}
+			}
+			if (y==Gside-1)
+			{
+				if (minidx[1]==0)
+				{
+					tmpidx = getidx(x, y-Gside, z, Jn, Kn, minidx, npad);
+					if ((inbox(x,y-Gside,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+					{
+						adj_part[cnt].pos[1] -= boxsize;
+						if(tmpidx>=0 && tmpidx<Ngrid) 
+						{
+							adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+							adj_part[cnt].group = tmpidx;
+							dp->cuboid->count[tmpidx]++;
+							if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						else
+						{
+							printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						cnt++;
+						adj_part[cnt] = buffrecv[s][n];
+					}
+					if (z==Gside-1)
+					{
+						tmpidx = getidx(x, y-Gside, z-Gside, Jn, Kn, minidx, npad);
+						if (minidx[2]==0 && (inbox(x,y-Gside,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[1] -= boxsize;
+							adj_part[cnt].pos[2] -= boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+					if(z==0)
+					{
+						tmpidx = getidx(x, y-Gside, z+Gside, Jn, Kn, minidx, npad);
+						if (maxidx[2]==Gside-1 && (inbox(x,y-Gside,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[1] -= boxsize;
+							adj_part[cnt].pos[2] += boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+				}
+			}
+			if (y==0)
+			{
+				if (maxidx[1]==Gside-1)
+				{
+					tmpidx = getidx(x, y+Gside, z, Jn, Kn, minidx, npad);
+					if ((inbox(x,y+Gside,z,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+					{
+						adj_part[cnt].pos[1] += boxsize;
+						if(tmpidx>=0 && tmpidx<Ngrid) 
+						{
+							adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+							adj_part[cnt].group = tmpidx;
+							dp->cuboid->count[tmpidx]++;
+							if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						else
+						{
+							printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+						}
+						cnt++;
+						adj_part[cnt] = buffrecv[s][n];
+					}
+					if (z==Gside-1)
+					{
+						tmpidx = getidx(x, y+Gside, z-Gside, Jn, Kn, minidx, npad);
+						if (minidx[2]==0 && (inbox(x,y+Gside,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[1] += boxsize;
+							adj_part[cnt].pos[2] -= boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+					if(z==0)
+					{
+						tmpidx = getidx(x, y+Gside, z+Gside, Jn, Kn, minidx, npad);
+						if (maxidx[2]==Gside-1 && (inbox(x,y+Gside,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+						{
+							adj_part[cnt].pos[1] += boxsize;
+							adj_part[cnt].pos[2] += boxsize;
+							if(tmpidx>=0 && tmpidx<Ngrid) 
+							{
+								adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+								adj_part[cnt].group = tmpidx;
+								dp->cuboid->count[tmpidx]++;
+								if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+									printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							else
+							{
+								printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+							}
+							cnt++;
+							adj_part[cnt] = buffrecv[s][n];
+						}
+					}
+				}
+			}
+			if (z==Gside-1)
+			{
+				tmpidx = getidx(x, y, z-Gside, Jn, Kn, minidx, npad);
+				if (minidx[2]==0 && (inbox(x,y,z-Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+				{
+					adj_part[cnt].pos[2] -= boxsize;
+					if(tmpidx>=0 && tmpidx<Ngrid) 
+					{
+						adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+						adj_part[cnt].group = tmpidx;
+						dp->cuboid->count[tmpidx]++;
+						if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+							printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+					}
+					else
+					{
+						printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+					}
+					cnt++;
+					adj_part[cnt] = buffrecv[s][n];
+				}
+			}
+			if(z==0)
+			{
+				tmpidx = getidx(x, y, z+Gside, Jn, Kn, minidx, npad);
+				if (maxidx[2]==Gside-1 && (inbox(x,y,z+Gside,minidx,maxidx)) && dp->cuboid->tag[tmpidx]>=0)
+				{
+					adj_part[cnt].pos[2] += boxsize;
+					if(tmpidx>=0 && tmpidx<Ngrid) 
+					{
+						adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+						adj_part[cnt].group = tmpidx;
+						dp->cuboid->count[tmpidx]++;
+						if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+							printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+					}
+					else
+					{
+						printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+					}
+					cnt++;
+					adj_part[cnt] = buffrecv[s][n];
+				}
+			}
+	  		if(inbox(x,y,z,minidx,maxidx) && tag[idx]>=0)
+			{
+				tmpidx = idx;
+				if(tmpidx>=0 && tmpidx<Ngrid) 
+				{
+					adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+					adj_part[cnt].group = tmpidx;
+					dp->cuboid->count[tmpidx]++;
+					if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+						printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+				}
+				else
+				{
+					printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+				}
+				cnt++;
+				adj_part[cnt] = buffrecv[s][n];
+			}
+//			if(minidx[0] == 0 && dp->cuboid->tag[idx-(Gside-1)*Jn*Kn] == TAG_FRONTIERS)
+//				{
+//					x-=Gside;
+//					adj_part[cnt].pos[0] -= boxsize;
+//				}
+//			}
+//			else if (x==0)
+//			{
+//				if(maxidx[0] == Gside-1 && dp->cuboid->tag[idx+(Gside-1)*Jn*Kn] == TAG_FRONTIERS)
+//				{
+//					x+=Gside;
+//					adj_part[cnt].pos[0] += boxsize;
+//				}
+//			}
+//			if (y==Gside-1)
+//			{
+//				if(minidx[1] == 0 && dp->cuboid->tag[idx-(Gside-1)*Kn] == TAG_FRONTIERS)
+//				{
+//					y-=Gside;
+//					adj_part[cnt].pos[1] -= boxsize;
+//				}
+//			}
+//			else if (y==0)
+//			{
+//				if(maxidx[1] == Gside-1 && dp->cuboid->tag[idx+(Gside-1)*Kn] == TAG_FRONTIERS)
+//				{
+//					y+=Gside;
+//					adj_part[cnt].pos[1] += boxsize;
+//				}
+//			}
+//			if (z==Gside-1)
+//			{
+//				if(minidx[2] == 0 && dp->cuboid->tag[idx-Gside+1] == TAG_FRONTIERS)
+//				{
+//					z-=Gside;
+//					adj_part[cnt].pos[2] -= boxsize;
+//				}
+//			}
+//			else if (z==0)
+//			{
+//				if(maxidx[2] == Gside-1 && dp->cuboid->tag[idx+Gside-1] == TAG_FRONTIERS)
+//				{
+//					z+=Gside;
+//					adj_part[cnt].pos[2] += boxsize;
+//				}
+//			}
+//			x = x - minidx[0] + npad;
+//			y = y - minidx[1] + npad;
+//			z = z - minidx[2] + npad;
+			
+// 			if (adj_part[cnt].pos[0]+1/nbox_boxsize >= boxsize)
+//			{
+//				if(minidx[0]/nbox_boxsize<=0.0)
+//				{
+//					adj_part[cnt].pos[0] -= boxsize;
+//				}
+//			}
+//			else if (adj_part[cnt].pos[0]-1/nbox_boxsize <= 0.0)
+//			{
+//				if((maxidx[0]+1.000001)/nbox_boxsize>=boxsize)
+//				{
+//					adj_part[cnt].pos[0] += boxsize;
+//				}
+//			}
+//			if (adj_part[cnt].pos[1]+1/nbox_boxsize >= boxsize)
+//			{
+//				if(minidx[1]/nbox_boxsize<=0.0)
+//				{
+//					adj_part[cnt].pos[1] -= boxsize;
+//				}
+//			}
+//			else if (adj_part[cnt].pos[1]-1/nbox_boxsize <= 0.0)
+//			{
+//				if((maxidx[1]+1.000001)/nbox_boxsize>=boxsize)
+//				{
+//					adj_part[cnt].pos[1] += boxsize;
+//				}
+//			}
+//			if (adj_part[cnt].pos[2]+1/nbox_boxsize >= boxsize)
+//			{
+//				if(minidx[2]/nbox_boxsize<=0.0)
+//				{
+//					adj_part[cnt].pos[2] -= boxsize;
+//				}
+//			}
+//			else if (adj_part[cnt].pos[2]-1/nbox_boxsize <= 0.0)
+//			{
+//				if((maxidx[2]+1.000001)/nbox_boxsize>=boxsize)
+//				{
+//					adj_part[cnt].pos[2] += boxsize;
+//				}
+//			}
+//
+//			if(tmpidx>=0 && tmpidx<Ngrid) 
+//			{
+//				adj_part[cnt].tag = dp->cuboid->tag[tmpidx];
+//				adj_part[cnt].group = tmpidx;
+//				dp->cuboid->count[tmpidx]++;
+//				if(dp->cuboid->tag[tmpidx] == TAG_OUTERCORE || dp->cuboid->tag[tmpidx] == TAG_FRONTIERS)
+//					printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+//			}
+//			else
+//			{
+//				printf("[%d]  box=%f, idx=%d, x=%f, y=%f, z=%f.\n", dp->rank, 1/nbox_boxsize, idx, adj_part[cnt].pos[0], adj_part[cnt].pos[1], adj_part[cnt].pos[2]);
+//			}
+
+//	        cnt++;
         }
     }
+//	assert(cnt==recv_tot_part);
+	part = (Body*)realloc((void*)dp->Part,sizeof(Body)*(npart+cnt));
+    adj_part = part + npart;
+	dp->Part = part;
+	dp->NumPart += cnt;
+	printf("[%d] Numpart = %d.\n", dp->rank, dp->NumPart);
 
     /*
       char fname[200] ;
@@ -224,8 +1018,6 @@ void broadcast_frontiers(Domain *dp, GlobalParam *gp)
            }
            fclose(fd);
       */
-
-
 
     MPI_Barrier(TREE_COMM_WORLD);
 

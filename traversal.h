@@ -1,7 +1,14 @@
 #ifndef _TRAVERSAL_H_
 #define _TRAVERSAL_H_
 
+#define _GNU_SOURCE
+#include <sched.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <malloc.h>
+
 #include "data.h"
+#include "dtime.h"
 #include "offload.h"
 #include "domain.h"
 #include "subtree.h"
@@ -43,7 +50,10 @@ typedef struct _block
 	int* upper;
 	PPQ* P_PQ_ppnode;
 	TWQ* P_PQ_treewalk;
-	
+
+    int* gridP;
+	int* numpart;
+	int* curIndex;	
 } Block;
 
 // Cao!'s functions.

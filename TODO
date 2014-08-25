@@ -1,19 +1,25 @@
+---------------------------------
+Updated on August 25, 2014.
+---------------------------------
 I. Offload:
-	1. Host load balancing. ***
-	2. Data transfer decreasing. **
+	[Done] 1. Host load balancing. ***
+	2. Data transfer decreasing. *
 	3. Offload in more former parts, e.g subtree consturction.
 
 II. Performance:
-	1. Elliminate memory R/W contention, why more MPI procs runs faster? **
-	2. Queue management optimization for multithread, using lock if nessesary, but make it as little harmful as to the performance. ***
-	3. Try better walking tree and processing cell model. **
+	[Done] 1. Elliminate memory R/W contention, why more MPI procs runs faster? **
+	[Done] 2. Queue management optimization for multithread, using lock if nessesary, but make it as little harmful as to the performance. ***
+	3. Try better walking tree and processing cell model. *
 	4. Thread load balancing, with work stealing? 
+	5. Why task parallization not scale well? Try data parallel? **
 
 III. Runtime:
-	1. Thread task model optimization, TEAM+MASTER+SLAVE is OK? **
+	[Ignore] 1. Thread task model optimization, TEAM+MASTER+SLAVE is OK? **
 	2. Thread running model optimization, using thread pool?
 
 IV. Correctness:
-	1. PM calculation failed when bigger than 16 procs. **
-	2. Why we need sleep 2 seconds before ppkernel in slave thread? ***
-	3. Copy the data back to the host. ***
+	[Done] 1. PM calculation failed when bigger than 16 procs. **
+	[Give up] 2. Why we need sleep 2 seconds before ppkernel in slave thread? ***
+	[Done] 3. Copy the data back to the host. ***
+	4. Integrate the time stepping procedure and check the correctness.
+

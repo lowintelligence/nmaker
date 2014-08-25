@@ -16,6 +16,8 @@
 #include "offload.h"
 #include "fillcurve.h"
 
+#define BIGQUEUE 0
+
 #define TAG_IDLEFIELD -4
 #define TAG_ADJOINING  0 // will be set to positive int as domain rank
 #define TAG_FRONTIERS -1
@@ -42,7 +44,7 @@ typedef struct {
     int group; // comes from cuboid
     /*    real phi; // gravitional potential, which is optional. */
     vect3d pos; // position of particle
-//    vect3d vel; // velocity of particle
+    vect3d vel; // velocity of particle
     vect3d acc; // acceration of particle
     real  mass;
 } Body;  // Body of N-Body, You knew it.
