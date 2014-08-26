@@ -4,7 +4,9 @@
 #include <string.h>
 #include <sys/time.h>
 #include <malloc.h>
-//#include <omp.h>
+#ifdef __MULTI_THREAD_
+#include <omp.h>
+#endif
 
 #include "ppkernel.h"
 //#include "dtime.h"
@@ -21,17 +23,19 @@ double dtime()
 
 int get_block_tnum(int bid)
 {
-//	return omp_get_num_threads();
-	return 1;
+	return omp_get_num_threads();
 }
 
 int get_block_tid(int bid)
 {
-//	return omp_get_thread_num();
-	return 0;
+	return omp_get_thread_num();
 }
 
+#ifdef __MULTI_THREAD_
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
+#else
+int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tnum, int tid)
+#endif
 {
     int n;
     double tstart, tstop, ttime;
@@ -66,7 +70,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 
 //#pragma omp parallel
 	{
-		int j, k, m, nb, mb, nt, mt, tid, tnum;
+		int j, k, m, nb, mb, nt, mt;
 
 		PRECTYPE x2, y2, z2, ax2, ay2, az2;
 		PRECTYPE dx1, dy1, dz1, dr21, dr31;
@@ -74,9 +78,13 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
 		PRECTYPE dx3, dy3, dz3, dr23, dr33;
 		PRECTYPE dx4, dy4, dz4, dr24, dr34;
 
+#ifdef __MULTI_THREAD_
+		int tid, tnum;
 		tid = get_block_tid(0);
 		tnum = get_block_tnum(0);
-
+#endif
+//		printf ("%ld, %d, %ld, %d, %ld, %d, %d.\n", A.x, la, B.x, lb, C.x, tnum, tid);
+//		return (0);
 	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
@@ -422,7 +430,11 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
     return 0;
 }
 
+#ifdef __MULTI_THREAD_
 int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, Array3 C)
+#else
+int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, Array3 C, int tnum, int tid)
+#endif
 {
     int n;
     double tstart, tstop, ttime;
@@ -457,7 +469,7 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 
 //#pragma omp parallel
 	{
-		int j, k, m, nb, mb, nt, mt, tid, tnum;
+		int j, k, m, nb, mb, nt, mt;
 
 		PRECTYPE x2, y2, z2, ax2, ay2, az2;
 		PRECTYPE dx1, dy1, dz1, dr21, dr31;
@@ -465,8 +477,11 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 		PRECTYPE dx3, dy3, dz3, dr23, dr33;
 		PRECTYPE dx4, dy4, dz4, dr24, dr34;
 
+#ifdef __MULTI_THREAD_
+		int tid, tnum;
 		tid = get_block_tid(0);
 		tnum = get_block_tnum(0);
+#endif
 	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;

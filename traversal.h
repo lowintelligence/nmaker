@@ -45,6 +45,8 @@ typedef struct _block
 
 	pthread_t* thread;
 	pthread_mutex_t *mutex;
+	pthread_barrier_t *bar;
+	PPParameter *pppar;
 	struct _block* pthArr;
 	int* lower;
 	int* upper;

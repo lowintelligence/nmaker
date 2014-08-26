@@ -56,6 +56,15 @@ typedef struct {
     Array3 acc;
 	PRECTYPE *mass;
 } PPPack;
+
+typedef struct {
+    Array3 pa;
+    Array3 pb;
+    Array3 pc;
+	int nA;
+	int nB;
+	int finish;
+} PPParameter;
 // To be finished later if needed.
 //int get_global_tnum();
 //int get_global_tid();
@@ -68,10 +77,18 @@ int get_block_tnum(int bid);
 __OffloadFunc_Macro__
 int get_block_tid(int bid);
 
+#ifdef __MULTI_THREAD_
 __OffloadFunc_Macro__
 int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C);
 
 __OffloadFunc_Macro__
 int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, Array3 C);
+#else
+__OffloadFunc_Macro__
+int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tnum, int tid);
+
+__OffloadFunc_Macro__
+int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, Array3 C, int tnum, int tid);
+#endif
 
 #endif

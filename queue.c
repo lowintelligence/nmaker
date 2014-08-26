@@ -311,6 +311,7 @@ double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PR
 	pthread_mutex_unlock(mutex);
 #endif
 	ds += dtime() - dt;
+//	return nA*nB*22.0;
 	return ds;
 }
 

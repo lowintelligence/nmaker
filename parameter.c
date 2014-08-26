@@ -25,7 +25,7 @@ void setup_parameters_numproc(GlobalParam* gp) {
     gp->NumSocket = numprocs;
     gp->NumCpuPerSocket = 1;
     gp->NumMicPerSocket = 0;
-    gp->NumThreadPerSocket = (int)(2*numprocs/numprocs);
+    gp->NumThreadPerSocket = (int)(32/numprocs);
     if (gp->NumThreadPerSocket <1 )
         gp->NumThreadPerSocket = 1;
 

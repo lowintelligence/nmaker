@@ -29,7 +29,7 @@ __OffloadFunc_Macro__
 #if BIGQUEUE
 int threaded(int nTeam, int nMaster, int nSlave, pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* lower,int* upper, Domain*dp,GlobalParam*gp,void* process(void*))
 #else
-int threaded(pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* gridP,int* curIndex,int*numpart, Domain*dp,GlobalParam*gp,void* process(void*))
+int threaded(int nTeam, int nSlave, pthread_t* thread, pthread_mutex_t *mutex, pthread_barrier_t *bar, PPParameter *pppar, Block* pth, int ts, int te, PPQ *pq, TWQ *tq, int* gridP,int* curIndex,int*numpart, Domain*dp,GlobalParam*gp,void* process(void*))
 #endif
 {
 	int i,teamid;
@@ -54,10 +54,10 @@ int threaded(pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int 
 		pth[i].bsize = nMaster+nSlave;
 		pth[i].tall = nTeam*(nMaster+nSlave);
 #else
-		pth[i].blockid=0;
-		pth[i].teamid=i;
-		pth[i].nTeam = te+1;
-		pth[i].nSlave = te+1;
+		pth[i].blockid=i/nTeam;
+		pth[i].teamid=i%nTeam;
+		pth[i].nTeam = nTeam;
+		pth[i].nSlave = nSlave;
 #endif
 		teamid=pth[i].teamid;
 		pth[i].tid = i;
@@ -72,6 +72,8 @@ int threaded(pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int 
 		pth[i].curIndex=&curIndex[teamid];
 		pth[i].numpart=&numpart[teamid];
 		pth[i].gridP=gridP;
+		pth[i].bar=&bar[teamid];
+		pth[i].pppar=&pppar[teamid];
 #endif
 		pth[i].dp=dp;
 		pth[i].gp=gp;
@@ -80,12 +82,13 @@ int threaded(pthread_t* thread, pthread_mutex_t *mutex, Block* pth, int ts, int 
 		pth[i].P_PQ_ppnode=pq;
 		pth[i].P_PQ_treewalk=tq;
 		pth[i].mutex=mutex;
+
 #ifdef __MIC__
-//		CPU_ZERO(&cpuset);
-//		int core_id=pth[i].blockid+teamid*(nMaster+nSlave)+dp->rank/2*pth[i].tall+1;
-////		int core_id=((i+dp->rank/2*pth[i].tall)%60)*4+((i+dp->rank/2*pth[i].tall)/60)+1;
-//		CPU_SET(core_id, &cpuset);
-//		pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
+		CPU_ZERO(&cpuset);
+		int core_id=pth[i].blockid+teamid*nSlave+dp->rank/2*nTeam*nSlave+1;
+//		int core_id=((i+dp->rank/2*pth[i].tall)%60)*4+((i+dp->rank/2*pth[i].tall)/60)+1;
+		CPU_SET(core_id, &cpuset);
+		pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
 #endif
 #if BIGQUEUE
 //		printf("[%d/%d] blockid=%d, teamid=%d, lower=%d, upper=%d, Ngrid=%d.\n", dp->rank, i, pth[i].blockid, pth[i].teamid, pth[i].first, pth[i].last, dp->cuboid->nSide[0]*dp->cuboid->nSide[1]*dp->cuboid->nSide[2]);
@@ -189,6 +192,21 @@ void* compPP(void* param){
 	//	destroy_queue_tw(&PQ_treewalk);
 
 }
+#else
+__OffloadFunc_Macro__
+void* compPP(void* param)
+{
+	int n;
+	Block* pth=(Block*)param;
+	int teamid=pth->teamid;
+	pthread_barrier_wait(pth->bar);
+	while(pth->pppar->finish==0)
+	{
+		ppkernel(pth->pppar->pa, pth->pppar->nA, pth->pppar->pb, pth->pppar->nB, EPS2, pth->pppar->pc, pth->nSlave, pth->blockid);
+		pthread_barrier_wait(pth->bar);
+		pthread_barrier_wait(pth->bar);
+	}
+}
 #endif
 
 __OffloadFunc_Macro__
@@ -251,12 +269,17 @@ void* teamMaster(void* param)
 	pc.y = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
 	pc.z = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*(1<<(MAX_MORTON_LEVEL*2)));
 
-	double tmutex=0.0, tqueue=0.0, ds, dt, dsq, dtq;
+	double tmutex=0.0, tqueue=0.0, ds, dt, dsq, dtq, dpp;
 #if BIGQUEUE
 	for(i=first;i<last;i++)
 	{
 #else
+	pth->pppar->pa=pa;
+	pth->pppar->pb=pb;
+	pth->pppar->pc=pc;
+	pth->pppar->finish=0;
 	int finish=0;
+	dpp = 0.0;
 //	int mc=0;
 	while(1)
 	{
@@ -266,7 +289,10 @@ void* teamMaster(void* param)
 		pthread_mutex_unlock(mutex);
 		tmutex+=dtime()-ds;
 		if(finish)
+		{
+			pth->pppar->finish=1;
 			break;
+		}
 		cnt=0;
 		i=*curIndex;
 #endif
@@ -355,61 +381,63 @@ void* teamMaster(void* param)
 	
 //	printf("before ppkernel, %ld\n", (1<<(MAX_MORTON_LEVEL))*sizeof(PRECTYPE)*MAX_PACKAGE_SIZE*18);
 	//	sleep(5);
-	double dpp = 0.0;
-	while(PQ_ppnode->length>0)
-	{
 #if BIGQUEUE
-		dpp += ProcessQP_PPnode(PQ_ppnode, ppkernel, pa, pb, pc, &pth->mutex[teamid]);
-#else
-		dpp += ProcessQP_PPnode(PQ_ppnode, ppkernel, pa, pb, pc);
+	dpp = 0.0;
 #endif
-	}
+		while(PQ_ppnode->length>0)
+		{
+#if BIGQUEUE
+			dpp += ProcessQP_PPnode(PQ_ppnode, ppkernel, pa, pb, pc, &pth->mutex[teamid]);
+#else
+//			dpp += ProcessQP_PPnode(PQ_ppnode, ppkernel, pa, pb, pc);
+//		}
+			PPelement el;
 
-//	PPelement *pe=PQ_ppnode->elements;
-//	n=PQ_ppnode->length/2;
-//	for(i=0;i<n;i++)
-//	{
-//		int nA, nB, dq;
-//
-//		nA = tree[pe[i].TA].nPart;
-//		packarray3(&part[tree[pe[i].TA].firstpart], nA, pa);
-//		packarray3(NULL, nA, pc);
-//
-//		if (pe[i].mask == 0)
-//		{
-//			nB = tree[pe[i].TB].nPart;
-//			packarray3(&part[tree[pe[i].TB].firstpart], nB, pb);
-//		}
-//		else
-//		{
-//			nB = 1;
-//			pb.x[0] = tree[pe[i].TB].masscenter[0];
-//			pb.y[0] = tree[pe[i].TB].masscenter[1];
-//			pb.z[0] = tree[pe[i].TB].masscenter[2];
-//	//		pb.x=pb.y=pb.z=NULL;	
-//		}
-//		ppkernel(pa, nA, pb, nB, EPS2, pc);
-//
-//		if (pe[i].mask == 1)
-//		{	
-//			pc.x[0] *= tree[pe[i].TB].mass;
-//			pc.y[1] *= tree[pe[i].TB].mass;
-//			pc.z[2] *= tree[pe[i].TB].mass;
-//		}
-//
-//		pusharray3(&part[tree[pe[i].TA].firstpart], nA, pc);
+			dequeue_pp(PQ_ppnode, &el);
+
+			int nA, nB;
+			nA = tree[el.TA].nPart;
+			packarray3(&part[tree[el.TA].firstpart], nA, pa);
+			packarray3(NULL, nA, pc);
+
+			if (el.mask == 0)
+			{
+				nB = tree[el.TB].nPart;
+				packarray3(&part[tree[el.TB].firstpart], nB, pb);
+			}
+			else
+			{
+				nB = 1;
+				pb.x[0] = tree[el.TB].masscenter[0];
+				pb.y[0] = tree[el.TB].masscenter[1];
+				pb.z[0] = tree[el.TB].masscenter[2];
+			}
+			pth->pppar->nA = nA;
+			pth->pppar->nB = nB;
+			pthread_barrier_wait(pth->bar);
+			ppkernel(pa, nA, pb, nB, EPS2, pc, pth->nSlave, pth->blockid);
+			pthread_barrier_wait(pth->bar);
+
+			if (el.mask == 1)
+			{	
+				pc.x[0] *= tree[el.TB].mass;
+				pc.y[1] *= tree[el.TB].mass;
+				pc.z[2] *= tree[el.TB].mass;
+			}
+
+			pusharray3(&part[tree[el.TA].firstpart], nA, pc);
+		}
+//		printf("after ppkernel\n");	
+//		printf("\nPP processing finished, time = %f.\n", dpp);
 //	}
-	
-//	printf("after ppkernel\n");	
-//	printf("\nPP processing finished, time = %f.\n", dpp);
-#if !BIGQUEUE
-	}
 
 //	printf("rank=%d\n",dp->rank);
 //	printf("\nQueue process finishing, total %d pp pairs.\n", *numpart);
 //	printf("thmchen= %d\n",mc);
+
+	}
 #endif
-	printf("mutex lock time = %f, queue time = %f\n",tmutex, tqueue);
+	printf("mutex lock time = %f, queue time = %f, pp memory time = %f \n",tmutex, tqueue, dpp);
 
 	free(pa.x);
 	free(pa.y);
@@ -420,6 +448,7 @@ void* teamMaster(void* param)
 	free(pc.x);
 	free(pc.y);
 	free(pc.z);
+	pthread_barrier_wait(pth->bar);
 }
 
 
@@ -552,11 +581,11 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	int nMaster_CPU = 1;
 	int nSlave_CPU = 1;
 #else
-	int nTeam_MIC = 120*2/dp->NumDom;//actually the num of slave threads,240 threads each mic(2)
-	int nSlave_MIC = nTeam_MIC;
+	int nTeam_MIC = 240/dp->NumDom;//actually the num of slave threads,240 threads each mic(2)
+	int nSlave_MIC = 1;
 	int nTeam_CPU = 16*2/dp->NumDom;
 //	int nTeam_CPU = 15;//pure CPU like ivx
-	int nSlave_CPU = nTeam_CPU;
+	int nSlave_CPU = 1;
 #endif
 
 	DomainTree *dtp = dp->domtree;
@@ -586,7 +615,7 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	int *off_tag = dp->cuboid->tag;
 
 #if !BIGQUEUE
-	double split=4.2;//change to 4.5
+	double split=5.8;//change to 4.5
 	static int stepping_num=-1;
 
 	int splitgrid,splitpart;
@@ -648,7 +677,7 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 #if BIGQUEUE
 		int tnum=nTeam_MIC * (nMaster_MIC + nSlave_MIC);
 #else
-		int tnum=nSlave_MIC;
+		int tnum=nTeam_MIC * nSlave_MIC;
 #endif
 		// Processing offload array pointers.
 		DomainTree dt;
@@ -685,6 +714,8 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 		Block* pth;
 		pthread_t* thread;
 		pthread_mutex_t *mutex;
+		pthread_barrier_t *bar;
+		PPParameter *pppar;
 
 		pth = (Block*)malloc(sizeof(Block)*tnum);
 		thread = (pthread_t*)malloc(sizeof(pthread_t)*tnum);
@@ -744,12 +775,17 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 		curIndex = (int*)malloc(sizeof(int)*nTeam_MIC);
 		numpart = (int*)malloc(sizeof(int)*nTeam_MIC);
 		mutex = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
+		bar = (pthread_barrier_t*)malloc(sizeof(pthread_barrier_t)*nTeam_MIC);
+		pppar = (PPParameter*)malloc(sizeof(PPParameter)*nTeam_MIC);
+
 		gridRange[0]=splitgrid;
 		gridRange[1]=(In-2)*Jn*Kn+(Jn-2)*Kn+Kn-2;
 		for (n=0; n<nTeam_MIC; n++)
 		{
 			curIndex[n]=gridRange[0];
 			numpart[n]=0;
+			pthread_barrier_init(&bar[n], NULL, nSlave_MIC);
+			pppar[n].finish=0;
 		}
 		pthread_mutex_init(mutex, NULL);
 #endif
@@ -757,7 +793,9 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 #if BIGQUEUE
 		threaded(nTeam_MIC, nMaster_MIC, nSlave_MIC, thread, mutex, pth, 0, nTeam_MIC-1, P_PQ_ppnode, P_PQ_treewalk, lower, upper, &d, gp,teamMaster);
 #else
-		threaded(thread, mutex, pth, 0, nTeam_MIC-1, P_PQ_ppnode, P_PQ_treewalk, gridRange, curIndex, numpart, &d, gp,teamMaster);
+		threaded(nTeam_MIC, nSlave_MIC, thread, mutex, bar, pppar, pth, 0, nTeam_MIC-1, P_PQ_ppnode, P_PQ_treewalk, gridRange, curIndex, numpart, &d, gp,teamMaster);
+		if (nSlave_MIC > 1)
+			threaded(nTeam_MIC, nSlave_MIC, thread, mutex, bar, pppar, pth, nTeam_MIC, tnum-1, P_PQ_ppnode, P_PQ_treewalk, gridRange, curIndex, numpart, &d, gp,compPP);
 #endif
 		printf("after teamMaster\n");	
 		for (i=0; i<tnum; i++)
@@ -770,13 +808,15 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	}
 #if BIGQUEUE
 #else
-	int tnum=nSlave_CPU;
+	int tnum=nTeam_CPU * nSlave_CPU;
 	TWQ *P_PQ_treewalk;
 	PPQ *P_PQ_ppnode;
 
 	Block* pth;
 	pthread_t* thread;
 	pthread_mutex_t *mutex;
+	pthread_barrier_t *bar;
+	PPParameter *pppar;
 
 	pth = (Block*)malloc(sizeof(Block)*tnum);
 	thread = (pthread_t*)malloc(sizeof(pthread_t)*tnum);
@@ -797,17 +837,23 @@ void dtt_traversal(Domain *dp, GlobalParam *gp)
 	gridRange = (int*)malloc(sizeof(int)*2);
 	curIndex = (int*)malloc(sizeof(int)*nTeam_CPU);
 	numpart = (int*)malloc(sizeof(int)*nTeam_CPU);
+	bar = (pthread_barrier_t*)malloc(sizeof(pthread_barrier_t)*nTeam_CPU);
+	pppar = (PPParameter*)malloc(sizeof(PPParameter)*nTeam_CPU);
 	gridRange[0]=Jn*Kn+Kn+1;
 	gridRange[1]=splitgrid-1;
 	for (n=0; n<nTeam_CPU; n++)
 	{
 		curIndex[n]=gridRange[0];
 		numpart[n]=0;
+		pthread_barrier_init(&bar[n], NULL, nSlave_CPU);
+		pppar[n].finish=0;
 	}
 	///////////////////////////////////
 	pthread_mutex_init(mutex, NULL);
 	printf("before teamMaster\n");	
-	threaded(thread, mutex, pth, 0, nTeam_CPU-1, P_PQ_ppnode, P_PQ_treewalk, gridRange,curIndex,numpart, dp,gp,teamMaster);
+	threaded(nTeam_CPU, nSlave_CPU, thread, mutex, bar, pppar, pth, 0, nTeam_CPU-1, P_PQ_ppnode, P_PQ_treewalk, gridRange, curIndex, numpart, dp, gp,teamMaster);
+	if (nSlave_CPU > 1)
+		threaded(nTeam_CPU, nSlave_CPU, thread, mutex, bar, pppar, pth, nTeam_CPU, tnum-1, P_PQ_ppnode, P_PQ_treewalk, gridRange, curIndex, numpart, dp, gp,compPP);
 	printf("after teamMaster\n");	
 	for (i=0; i<tnum; i++)
 	{
