@@ -72,6 +72,7 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
 //		dp->Part[n].vel[1]=drand48()*velocity;
 //		dp->Part[n].vel[2]=drand48()*velocity;
 		dp->Part[n].ID=n_start+n+1;
+		dp->Part[n].mass=1.0;
     }
 //    read_Particle(dp->Part , fname, n_start, n_count);
 	

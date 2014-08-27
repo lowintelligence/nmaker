@@ -34,7 +34,7 @@
 #include "offload.h"
 #include <pthread.h>
 
-#define QUEUE_BLOCK_SIZE 4194304
+#define QUEUE_BLOCK_SIZE 2097152
 
 typedef struct
 {
@@ -57,6 +57,15 @@ __OffloadFunc_Macro__
 int packarray3(Body* pp, int n, Array3 pa);
 
 __OffloadFunc_Macro__
+int packarray3m(Body* pp, int n, Array3 pa, PRECTYPE *mass);
+
+__OffloadFunc_Macro__
+int packarray3o(Body* pp, int offset, int n, Array3 pa);
+
+__OffloadFunc_Macro__
+int packarray3om(Body* pp, int offset, int n, Array3 pa, PRECTYPE *mass);
+
+__OffloadFunc_Macro__
 int pusharray3(Body* pp, int n, Array3 pa);
 
 __OffloadFunc_Macro__
@@ -75,11 +84,7 @@ __OffloadFunc_Macro__
 int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask);
 
 __OffloadFunc_Macro__
-#if BIGQUEUE
-double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex);
-#else
 double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC);
-#endif
 
 typedef struct
 {
@@ -97,6 +102,41 @@ typedef struct
 	TWelement* elements;
 } TWQ;
 
+typedef struct _block
+{
+	int blockid;//id in one block
+	int bsize;//size of block
+	int tid;// thread id in all
+	int tall;//total num of threads
+
+	int teamid; //id of teams
+	PPQ* PQ_ppnode;
+	TWQ* PQ_treewalk;
+	PPQ* PQ_ptnode; //to be implemented
+	int first;
+	int last;
+	int nTeam;
+	int nMaster;
+	int nSlave;
+
+	Domain* dp;
+	GlobalParam* gp;
+
+	pthread_t* thread;
+	pthread_mutex_t *mutex;
+	pthread_barrier_t *bar;
+	PPParameter *pppar;
+	struct _block* pthArr;
+	int* lower;
+	int* upper;
+	PPQ* P_PQ_ppnode;
+	TWQ* P_PQ_treewalk;
+
+    int* gridP;
+	int* numpart;
+	int* curIndex;	
+} Block;
+
 __OffloadFunc_Macro__
 int init_queue_tw(TWQ *pq, int n);
 
@@ -113,7 +153,7 @@ __OffloadFunc_Macro__
 int EnqueueP_Cell(TWQ *PQ_treewalk, int TA, int TB, double theta);
 
 __OffloadFunc_Macro__
-int ProcessQP_Cell(TWQ *PQ_treewalk, PPQ *PQ_ppnode, int process(int, int, double, PPQ*, TWQ*));
+int ProcessQP_Cell(TWQ *PQ_treewalk, Block* pth, int process(int, int, double, TWQ*, Block*));
 
 __OffloadFunc_Macro__
 void initGlobal(Body* p, Node* t);

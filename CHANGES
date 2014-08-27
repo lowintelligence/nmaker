@@ -1,3 +1,11 @@
+***********************************************
+Changes from last update to August 27, 2014:
+-----------------------------------------------
+    1. Delete the BIGQUEUE scheme.
+	2. Redesign the tree walk, combined with pp calculation.
+	3. PP calculation merging.
+	4. Data parallel in pp kernel.
+***********************************************
 
 ***********************************************
 Changes from last update to August 25, 2014:

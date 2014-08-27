@@ -34,6 +34,7 @@ void driver(void) {
 	free(part);
 	free(tree);
 #endif
+	MPI_Barrier(MPI_COMM_WORLD);
 
     setup_parameters(&allparam);
     print_parameters(&allparam);

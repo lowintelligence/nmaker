@@ -9,9 +9,9 @@ I. Offload:
 II. Performance:
 	[Done] 1. Elliminate memory R/W contention, why more MPI procs runs faster? **
 	[Done] 2. Queue management optimization for multithread, using lock if nessesary, but make it as little harmful as to the performance. ***
-	3. Try better walking tree and processing cell model. *
+	[Done] 3. Try better walking tree and processing cell model. *
 	4. Thread load balancing, with work stealing? 
-	5. Why task parallization not scale well? Try data parallel? **
+	[Done] 5. Why task parallization not scale well? Try data parallel? **
 
 III. Runtime:
 	[Ignore] 1. Thread task model optimization, TEAM+MASTER+SLAVE is OK? **

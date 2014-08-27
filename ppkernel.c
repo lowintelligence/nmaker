@@ -23,12 +23,12 @@ double dtime()
 
 int get_block_tnum(int bid)
 {
-	return omp_get_num_threads();
+//	return omp_get_num_threads();
 }
 
 int get_block_tid(int bid)
 {
-	return omp_get_thread_num();
+//	return omp_get_thread_num();
 }
 
 #ifdef __MULTI_THREAD_

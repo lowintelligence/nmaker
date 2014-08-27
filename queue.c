@@ -204,9 +204,8 @@ int destroy_queue_tw(TWQ *pq)
 	}
 }
 
-
 __OffloadFunc_Macro__
-packarray3(Body* pp, int n, Array3 pa)
+int packarray3(Body* pp, int n, Array3 pa)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
@@ -231,7 +230,86 @@ packarray3(Body* pp, int n, Array3 pa)
 }
 
 __OffloadFunc_Macro__
-pusharray3(Body* pp, int n, Array3 pa)
+int packarray3m(Body* pp, int n, Array3 pa, PRECTYPE *mass)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i] = pp[i].pos[0];
+			pa.y[i] = pp[i].pos[1];
+			pa.z[i] = pp[i].pos[2];
+			mass[i] = pp[i].mass;
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i] = 0;
+			pa.y[i] = 0;
+			pa.z[i] = 0;
+			mass[i] = 0;
+		}
+	}
+}
+
+__OffloadFunc_Macro__
+int packarray3o(Body* pp, int offset, int n, Array3 pa)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = pp[i].pos[0];
+			pa.y[i+offset] = pp[i].pos[1];
+			pa.z[i+offset] = pp[i].pos[2];
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = 0;
+			pa.y[i+offset] = 0;
+			pa.z[i+offset] = 0;
+		}
+	}
+}
+
+__OffloadFunc_Macro__
+int packarray3om(Body* pp, int offset, int n, Array3 pa, PRECTYPE *mass)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = pp[i].pos[0];
+			pa.y[i+offset] = pp[i].pos[1];
+			pa.z[i+offset] = pp[i].pos[2];
+			mass[i+offset] = pp[i].mass;
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = 0;
+			pa.y[i+offset] = 0;
+			pa.z[i+offset] = 0;
+			mass[i+offset] = 0;
+		}
+	}
+}
+
+__OffloadFunc_Macro__
+int pusharray3(Body* pp, int n, Array3 pa)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
@@ -253,11 +331,7 @@ int EnqueueP_PPnode(PPQ *PQ_ppnode, int TA, int TB, int mask)
 }
 
 __OffloadFunc_Macro__
-#if BIGQUEUE
-double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC, pthread_mutex_t *mutex)
-#else
 double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PRECTYPE, Array3), Array3 pA, Array3 pB, Array3 pC)
-#endif
 {
 	PPelement el;
 	int nA, nB, dq;
@@ -265,13 +339,9 @@ double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PR
 	double ds, dt;
 	ds = 0.0;
 	dt = dtime();
-#if BIGQUEUE
-	pthread_mutex_lock(mutex);
-#endif
+
 	dq = dequeue_pp(PQ_ppnode, &el);
-#if BIGQUEUE
-	pthread_mutex_unlock(mutex);
-#endif
+
 	if (dq == -1) return 0.0;
 //	printf("length=%d, TA=%d, nA=%d, TB=%d, nB=%d, %.2f\n", PQ_ppnode->length, el.TA, tree[el.TA].nPart, el.TB, tree[el.TB].nPart, pC.x[0]);
 //	sleep(3);
@@ -303,13 +373,9 @@ double ProcessQP_PPnode(PPQ *PQ_ppnode, int process(Array3, int, Array3, int, PR
 		pC.y[1] *= tree[el.TB].mass;
 		pC.z[2] *= tree[el.TB].mass;
 	}
-#if BIGQUEUE
-	pthread_mutex_lock(mutex);
-#endif
+
 	pusharray3(&part[tree[el.TA].firstpart], nA, pC);
-#if BIGQUEUE
-	pthread_mutex_unlock(mutex);
-#endif
+
 	ds += dtime() - dt;
 //	return nA*nB*22.0;
 	return ds;
@@ -323,10 +389,10 @@ int EnqueueP_Cell(TWQ *PQ_treewalk, int TA, int TB, double theta)
 }
 
 __OffloadFunc_Macro__
-int ProcessQP_Cell(TWQ *PQ_treewalk, PPQ *PQ_ppnode, int process(int, int, double, PPQ*, TWQ*))
+int ProcessQP_Cell(TWQ *PQ_treewalk, Block *pth, int process(int, int, double, TWQ*, Block*))
 {
 	TWelement el;
 	dequeue_tw(PQ_treewalk, &el);
 //	printf("w");
-	process(el.TA, el.TB, el.theta, PQ_ppnode, PQ_treewalk);
+	process(el.TA, el.TB, el.theta, PQ_treewalk, pth);
 }

@@ -16,8 +16,6 @@
 #include "offload.h"
 #include "fillcurve.h"
 
-#define BIGQUEUE 0
-
 #define TAG_IDLEFIELD -4
 #define TAG_ADJOINING  0 // will be set to positive int as domain rank
 #define TAG_FRONTIERS -1

@@ -30,7 +30,7 @@
     #define SQRT sqrtf
     #define INVSQRT invsqrtf
     #define N_CACHE 1024
-    #define CLCNT 64
+    #define CLCNT 32
     #define UNROLL 4
 #else
     #define PRECTYPE double
@@ -61,9 +61,11 @@ typedef struct {
     Array3 pa;
     Array3 pb;
     Array3 pc;
+	PRECTYPE *mass;
 	int nA;
 	int nB;
 	int finish;
+	int calcm;
 } PPParameter;
 // To be finished later if needed.
 //int get_global_tnum();
