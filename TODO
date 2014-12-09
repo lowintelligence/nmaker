@@ -1,9 +1,9 @@
 ---------------------------------
-Updated on August 25, 2014.
+Updated on Dec 9, 2014.
 ---------------------------------
 I. Offload:
 	[Done] 1. Host load balancing. ***
-	2. Data transfer decreasing. *
+	[Half done] 2. Data transfer decreasing. *
 	3. Offload in more former parts, e.g subtree consturction.
 
 II. Performance:
@@ -21,5 +21,12 @@ IV. Correctness:
 	[Done] 1. PM calculation failed when bigger than 16 procs. **
 	[Give up] 2. Why we need sleep 2 seconds before ppkernel in slave thread? ***
 	[Done] 3. Copy the data back to the host. ***
-	4. Integrate the time stepping procedure and check the correctness.
+	[Done] 4. Integrate the time stepping procedure.
+	5. Test a real case and check the correctness. ***
+	6. Correct the potetial >2G integer bugs to guarantee the running for more than 2048^3 particles. ***
+
+V. Code style:
+	1. Rewrite and check the code with new data definition. ***
+	2. Eliminate unnessesary duplicated varibles and the arrays no need to keep-in-house. **
+	3. Build the code with delivering tools like automake. *
 

@@ -30,7 +30,7 @@
     #define SQRT sqrtf
     #define INVSQRT invsqrtf
     #define N_CACHE 1024
-    #define CLCNT 32
+    #define CLCNT 64
     #define UNROLL 4
 #else
     #define PRECTYPE double

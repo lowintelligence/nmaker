@@ -1,4 +1,20 @@
 ***********************************************
+Changes from last update to Dec 9, 2014:
+-----------------------------------------------
+	1. Fixed the bug in sampling and data initialization.
+	2. Using a smaller data structure to do the MIC transfering and computing.
+	3. Checked the memory allocation and free.
+	4. Tested with 1280^3 particles on Era, with 40 nodes.
+***********************************************
+
+***********************************************
+Changes from last update to September 28, 2014:
+-----------------------------------------------
+	1. Fixed a bug in domain decomposition.
+	2. Add the naive time stepping.
+***********************************************
+
+***********************************************
 Changes from last update to August 27, 2014:
 -----------------------------------------------
     1. Delete the BIGQUEUE scheme.

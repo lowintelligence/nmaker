@@ -45,9 +45,9 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
     int n;
     double box;
 	int nsize=1<<gp->NumBits;
-	unsigned long int nparl=1<<gp->PartBits;
+	unsigned long int nparl=1280;
     unsigned long int n_start = myid*nparl*nparl*nparl/numprocs;
-    int  n_count = (int)(nparl/numprocs*nparl*nparl);
+    int  n_count = (int)(nparl*nparl*nparl/numprocs);
 
     if (myid == numprocs-1)
         n_count = nparl*nparl*nparl - n_start;
@@ -68,9 +68,9 @@ void init_particle_into_domain(Domain* dp, GlobalParam* gp,int myid, int numproc
 			dp->Part[n].pos[1]=99999.97f;
 		if(dp->Part[n].pos[2]>99999.97f)
 			dp->Part[n].pos[2]=99999.97f;
-//		dp->Part[n].vel[0]=drand48()*velocity;
-//		dp->Part[n].vel[1]=drand48()*velocity;
-//		dp->Part[n].vel[2]=drand48()*velocity;
+		dp->Part[n].vel[0]=drand48()*velocity;
+		dp->Part[n].vel[1]=drand48()*velocity;
+		dp->Part[n].vel[2]=drand48()*velocity;
 		dp->Part[n].ID=n_start+n+1;
 		dp->Part[n].mass=1.0;
     }

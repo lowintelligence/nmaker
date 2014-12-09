@@ -16,14 +16,16 @@ NO_OFFLOAD=
 STATIC=
 #STATIC=-static_mpi
 
+MKLROOT?=/opt/intel/mkl
+
 CC=mpiicc
 MICCC=icc
 CFLAGS=$(STATIC) -xHost -fimf-domain-exclusion=15 -O3 $(OPENMP) $(NO_OFFLOAD) -g -traceback -Bdynamic -fno-omit-frame-pointer 
 CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer
-INC=-I/opt/intel/mkl/include/fftw
+INC=-I$(MKLROOT)/mkl/include/fftw
 
 LD=mpiicc
-LDFLAGS=$(STATIC) -L/opt/intel/mkl/lib/intel64 -lfftw2x_cdft_SINGLE_lp64 -lmkl_cdft_core -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -traceback -Bdynamic -fno-omit-frame-pointer
+LDFLAGS=$(STATIC) -L$(MKLROOT)/lib/intel64 -lfftw2x_cdft_SINGLE_intelmpi_lp64 -lmkl_cdft_core -lmkl_blacs_intelmpi_lp64 -lmkl_core -lmkl_intel_lp64 -lmkl_sequential -traceback -Bdynamic -fno-omit-frame-pointer
 
 run: $(PROG)
 	OMP_NUM_THREADS=$(OMP_NUM_THREADS) \

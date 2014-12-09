@@ -119,8 +119,8 @@ int main(int argc, char *argv[])
 
 //	nCPU = 0;
 //	nMIC0 = nPart / 2;
-	nCPU = (int) ((double)(nPart + CLCNT - 1) / (double)CLCNT / 6.76) * CLCNT; 
-	nMIC0 = ((int) ((double)nCPU * 2.88) + CLCNT - 1) / CLCNT  * CLCNT; 
+	nCPU = (int) ((double)(nPart + CLCNT - 1) / (double)CLCNT / 6.72) * CLCNT; 
+	nMIC0 = ((int) ((double)nCPU * 2.86) + CLCNT - 1) / CLCNT  * CLCNT; 
 	nMIC1 = nPart - nCPU - nMIC0;
 	printf ("nCPU=%d, nMIC0=%d, nMIC1=%d.\n", nCPU, nMIC0, nMIC1);
 

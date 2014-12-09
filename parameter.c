@@ -25,7 +25,7 @@ void setup_parameters_numproc(GlobalParam* gp) {
     gp->NumSocket = numprocs;
     gp->NumCpuPerSocket = 1;
     gp->NumMicPerSocket = 0;
-    gp->NumThreadPerSocket = (int)(32/numprocs);
+    gp->NumThreadPerSocket = (int)(5);
     if (gp->NumThreadPerSocket <1 )
         gp->NumThreadPerSocket = 1;
 
@@ -36,13 +36,13 @@ void setup_parameters_numproc(GlobalParam* gp) {
 //    gp->NumBits = 13;
 //    gp->NumBits = 9;
 //      gp->NumBits = 8;
-    gp->NumBits = 4;
+    gp->NumBits = 7;
 
 
 
-    gp->PartBits = gp->NumBits + 4 ;
+//    gp->PartBits = gp->NumBits + 5 ;
     gp->NumGridPerSide = 1<<gp->NumBits;//128;
-    parl =(1<<gp->PartBits);//2048*2048*2048;
+    parl = 1280;//2048*2048*2048;
     gp->TotNumPart =parl*parl*parl;//2048*2048*2048;
 	printf("NumPart=%ld,%d \n",gp->TotNumPart,gp->PartBits);
     gp->OpenAngle = 0.3;

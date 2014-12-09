@@ -541,4 +541,61 @@ void free_subcuboid(SubCuboid* sp)
 /* boundary hash table : the first element is LowerHilbertKey */
 
 
+void clean_particles(Domain *dp, GlobalParam *gp, long oldpartnum)
+{
+	SubCuboid *sub = dp->cuboid;
+	int i, j, k, l, m, n;
+	int In, Jn, Kn;
+	long npart;
+	Body *p, *p1;
+
+	p = dp->Part;
+	p1 = dp->Part;
+	In = sub->nSide[0];
+	Jn = sub->nSide[1];
+	Kn = sub->nSide[2];
+	npart = 0;
+	for (i=0; i<In; i++)
+	{
+		for (j=0; j<Jn; j++)
+		{
+			for (k=0; k<Kn; k++)
+			{
+				n = i*Jn*Kn + j*Kn + k;
+				if (sub->tag[n] == TAG_OUTERCORE || sub->tag[n] == TAG_FRONTIERS)
+				{
+					m = sub->count[n];
+					npart += m;
+					for (l=0; l<m; l++)
+					{
+						*p = *p1;
+						p++;
+						p1++;
+					}
+				}
+				else
+				{
+					p1 += sub->count[n];
+				}
+			}
+		}
+	}
+
+	printf("[%d] npart = %d, oldpartnum = %d.\n", dp->rank, npart, oldpartnum);
+
+	assert(npart == oldpartnum);
+	dp->Part = (Body*)realloc((void*)dp->Part,sizeof(Body)*(oldpartnum));
+	dp->NumPart = oldpartnum;
+//	dp->DomList[dp->rank].NumPart = oldpartnum;
+	int *nSample;
+	nSample = malloc(sizeof(int)*dp->NumDom);
+	MPI_Allgather(&dp->NumPart, 1, MPI_INT, nSample, 1, MPI_INT, MPI_COMM_WORLD);
+
+	for (i=0; i<dp->NumDom; i++)
+	{
+		dp->DomList[i].NumPart = nSample[i];
+	}
+	free(nSample);
+}
+
 

@@ -47,6 +47,14 @@ typedef struct {
     real  mass;
 } Body;  // Body of N-Body, You knew it.
 
+typedef struct {
+    /*    real phi; // gravitional potential, which is optional. */
+    code key; // peano-hilbert key, which could be overlayed.
+    vect3d pos; // position of particle
+    vect3d acc; // acceration of particle
+    real  mass;
+} SBody;  // Body of N-Body, You knew it.
+
 /* Old traditional node structure.
 typedef struct {
     int nPart;

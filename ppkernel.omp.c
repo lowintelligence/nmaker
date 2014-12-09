@@ -482,8 +482,8 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 
 				for (m=0; m<mb; m++) {
 #ifdef __MULTI_THREAD_
-					mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
-#else
+//					mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
+//#else
 					mt = m*N_CACHE + ((m==mb-1) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #endif
 
@@ -505,8 +505,8 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 
 #pragma ivdep
 #ifdef __MULTI_THREAD_
-							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
-#else
+//							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
+//#else
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
@@ -549,8 +549,8 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 #pragma ivdep
 #pragma vector aligned
 #ifdef __MULTI_THREAD_
-							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
-#else
+//							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
+//#else
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
@@ -641,8 +641,8 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 			for (m=0; m<mb; m++)
 			{
 #ifdef __MULTI_THREAD_
-				mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
-#else
+//				mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
+//#else
 				mt = m*N_CACHE + ((m==mb-1) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #endif
 
@@ -660,8 +660,8 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 					{
 #pragma ivdep
 #ifdef __MULTI_THREAD_
-						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
-#else
+//						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
+//#else
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
@@ -685,8 +685,8 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 					{
 #pragma ivdep
 #ifdef __MULTI_THREAD_
-						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
-#else
+//						for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
+//#else
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{

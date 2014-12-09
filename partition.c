@@ -3,7 +3,7 @@
 
 typedef struct {
     float pos[3];
-    float w;
+    double w;
 } Sample;
 
 
@@ -11,7 +11,7 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
 {
     int n, total, start, end, myid, nParticle ;
     int nDomain = dp->NumDom;
-    int sample_gap = 16;//1.0;
+    int sample_gap = 32;//1.0;
     Sample *sample;
     Sample *sendBuffer;
     int *nSample;
@@ -37,15 +37,17 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
     sample = (Sample*)malloc(sizeof(Sample)*total );
 
     n=0;
+	int i=0;
     nParticle = nSample[myid];
-
-    while( n < nParticle ) {
-        sendBuffer[n].pos[0] = dp->Part[n].pos[0];
-        sendBuffer[n].pos[1] = dp->Part[n].pos[1];
-        sendBuffer[n].pos[2] = dp->Part[n].pos[2];
-        sendBuffer[n].w = 1.0f;
+    while( i < nParticle ) {
+        sendBuffer[i].pos[0] = dp->Part[n].pos[0];
+        sendBuffer[i].pos[1] = dp->Part[n].pos[1];
+        sendBuffer[i].pos[2] = dp->Part[n].pos[2];
+        sendBuffer[i].w = 1.0f;
         n+=sample_gap;
+		i++;
     }//Cao! n+=nblock and sample_ratio=0.1
+	
     MPI_Datatype mpi_sample_type;
     MPI_Type_contiguous(sizeof(Sample), MPI_CHAR, &mpi_sample_type );
     MPI_Type_commit(&mpi_sample_type);
@@ -89,7 +91,7 @@ Sample* gather_total_sample(Domain* dp, int *total_sample)
 
 typedef struct {
     code key;
-    float weight;
+    double weight;
 } CodeSort;
 
 int ascend(const void *a ,const void * b) {
@@ -117,7 +119,7 @@ void* partial_sort_key(void* data) {
     clock_t time_start, time_end;
     time_start = clock();
 #ifndef SILENCE
-    printf("task[%d]:%s\n", p->rank, __func__);
+    printf("task[%d]: nPart=%d, %s\n", p->rank, p->nPart, __func__);
 #endif
     real2int = (double)(1<<NBITS)/BOXSIZE;
     long int seed = 1243981;
@@ -244,18 +246,28 @@ void determine_partition_code(Sample* sample, int NumPart, int NumThread, double
         free(codebuff);
     }
     /* merge sort */
+    double t_weight = 0;
+    for (n=0; n<NumPart; n++) {
+        if(codelist[n].weight == 1.0) t_weight += codelist[n].weight;
+    }
+    printf("[%d], t_weight = %f, Numpart = %d.\n", dp->rank, t_weight, NumPart);
 
     for (n=1; n<NumPart; n++) {
-        codelist[n].weight += codelist[n-1].weight;
+       codelist[n].weight += codelist[n-1].weight;
     }
     int iDom, nGroup = dp->NumDom; //= nDomain;
-    float next_weight, total_weight = codelist[NumPart-1].weight;
+    double next_weight, total_weight = codelist[NumPart-1].weight;
     next_weight = total_weight/nGroup;
+    printf("[%d], total_weight = %f, Numpart = %d.\n", dp->rank, total_weight, NumPart);
     dp->DomList[0].LowerHilbertKey = CODE_MINIMUM;
     dp->DomList[(dp->NumDom)-1].UpperHilbertKey = CODE_MAXIMUM;
     iDom = 0;
     for (n=0; n<NumPart; n++) {
         if ( codelist[n].weight > next_weight ) {
+			if (dp->rank == 0)
+			{
+				printf("[0] codelist[%d].weight=%f, key=%ld, next_weight=%f. \n", n, codelist[n].weight, codelist[n].key, next_weight);
+			}
             next_weight += (total_weight+iDom)/nGroup;
             dp->DomList[iDom].UpperHilbertKey = codelist[n].key;
             dp->DomList[iDom+1].LowerHilbertKey = codelist[n].key;
@@ -482,7 +494,8 @@ void partition_sorted_particles(Domain *dp, int NumPart, int NumThread, double b
 /********************** partition *********************/
 void partition_domains(Domain *dp, int NumThread)
 {
-    int i, n, idx, disp;
+    int i, n, idx;
+    long disp;
     int myid, numprocs;
     int nDomain = dp->NumDom;
     int nPart = dp->NumPart;
@@ -634,8 +647,9 @@ void decompose_domain(Domain* dp, GlobalParam *gp)
     sample = gather_total_sample(dp, &totSample);
 
 #ifndef SILENCE
-    if ( 0 == myrank )
-        printf(" total_sample = %d nBits = %d\n", totSample, nBits);
+//    if ( 0 == myrank )
+//        printf(" total_sample = %d nBits = %d\n", totSample, nBits);
+        printf("[%d] total_sample = %d nBits = %d\n", dp->rank, totSample, nBits);
 #endif
 
     determine_partition_code(sample, totSample, nThread, boxSize, nBits, dp);

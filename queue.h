@@ -54,19 +54,19 @@ typedef struct
 } PPQ;
 
 __OffloadFunc_Macro__
-int packarray3(Body* pp, int n, Array3 pa);
+int packarray3(SBody* pp, int n, Array3 pa);
 
 __OffloadFunc_Macro__
-int packarray3m(Body* pp, int n, Array3 pa, PRECTYPE *mass);
+int packarray3m(SBody* pp, int n, Array3 pa, PRECTYPE *mass);
 
 __OffloadFunc_Macro__
-int packarray3o(Body* pp, int offset, int n, Array3 pa);
+int packarray3o(SBody* pp, int offset, int n, Array3 pa);
 
 __OffloadFunc_Macro__
-int packarray3om(Body* pp, int offset, int n, Array3 pa, PRECTYPE *mass);
+int packarray3om(SBody* pp, int offset, int n, Array3 pa, PRECTYPE *mass);
 
 __OffloadFunc_Macro__
-int pusharray3(Body* pp, int n, Array3 pa);
+int pusharray3(SBody* pp, int n, Array3 pa);
 
 __OffloadFunc_Macro__
 int init_queue_pp(PPQ *pq, int n);
@@ -147,7 +147,7 @@ __OffloadFunc_Macro__
 int dequeue_tw(TWQ *pq, TWelement *peout);
 
 __OffloadFunc_Macro__
-int destroy_queue_tw(TWQ *pq);
+int destroy_queue_tw(TWQ *pq, int n);
 
 __OffloadFunc_Macro__
 int EnqueueP_Cell(TWQ *PQ_treewalk, int TA, int TB, double theta);
@@ -156,5 +156,5 @@ __OffloadFunc_Macro__
 int ProcessQP_Cell(TWQ *PQ_treewalk, Block* pth, int process(int, int, double, TWQ*, Block*));
 
 __OffloadFunc_Macro__
-void initGlobal(Body* p, Node* t);
+void initGlobal(SBody* p, Node* t);
 #endif

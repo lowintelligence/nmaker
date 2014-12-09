@@ -19,13 +19,13 @@
 #include <assert.h>
 
 __OffloadVar_Macro__
-static Body* part;
+static SBody* part;
 
 __OffloadVar_Macro__
 static Node* tree;
 
 __OffloadFunc_Macro__
-void initGlobal(Body* p, Node* t)
+void initGlobal(SBody* p, Node* t)
 {
 	part = p;
 	tree = t;
@@ -41,7 +41,8 @@ int init_queue_pp(PPQ *p_pq, int n)
 		p_pq[i].length = 0;
 		p_pq[i].head = 0;
 		p_pq[i].tail = 0;
-		p_pq[i].elements = (PPelement*)malloc(sizeof(PPelement)*p_pq[i].size);
+//		p_pq[i].elements = (PPelement*)malloc(sizeof(PPelement)*p_pq[i].size);
+		p_pq[i].elements = NULL;
 	}
 	return 0;
 }
@@ -192,20 +193,24 @@ int dequeue_tw(TWQ *pq, TWelement *peout)
 }
 
 __OffloadFunc_Macro__
-int destroy_queue_tw(TWQ *pq)
+int destroy_queue_tw(TWQ *pq, int n)
 {
-	if (pq->size > 0)
+	int i;
+	for (i=0; i<n; i++)
 	{
-		free(pq->elements);
-		pq->elements = NULL;
-		pq->head = pq->tail = -1;
-		pq->size = 0;
-		pq->length = 0;
+	if (pq[i].size > 0)
+	{
+		free(pq[i].elements);
+		pq[i].elements = NULL;
+		pq[i].head = pq[i].tail = -1;
+		pq[i].size = 0;
+		pq[i].length = 0;
+	}
 	}
 }
 
 __OffloadFunc_Macro__
-int packarray3(Body* pp, int n, Array3 pa)
+int packarray3(SBody* pp, int n, Array3 pa)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
@@ -230,7 +235,7 @@ int packarray3(Body* pp, int n, Array3 pa)
 }
 
 __OffloadFunc_Macro__
-int packarray3m(Body* pp, int n, Array3 pa, PRECTYPE *mass)
+int packarray3m(SBody* pp, int n, Array3 pa, PRECTYPE *mass)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
@@ -257,7 +262,7 @@ int packarray3m(Body* pp, int n, Array3 pa, PRECTYPE *mass)
 }
 
 __OffloadFunc_Macro__
-int packarray3o(Body* pp, int offset, int n, Array3 pa)
+int packarray3o(SBody* pp, int offset, int n, Array3 pa)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
@@ -282,7 +287,7 @@ int packarray3o(Body* pp, int offset, int n, Array3 pa)
 }
 
 __OffloadFunc_Macro__
-int packarray3om(Body* pp, int offset, int n, Array3 pa, PRECTYPE *mass)
+int packarray3om(SBody* pp, int offset, int n, Array3 pa, PRECTYPE *mass)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
@@ -309,7 +314,7 @@ int packarray3om(Body* pp, int offset, int n, Array3 pa, PRECTYPE *mass)
 }
 
 __OffloadFunc_Macro__
-int pusharray3(Body* pp, int n, Array3 pa)
+int pusharray3(SBody* pp, int n, Array3 pa)
 {
 	int i;
 //	pa.x = pa.y = pa.z = NULL;
