@@ -2,11 +2,9 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <sys/time.h>
 #include <malloc.h>
 #include <omp.h>
 
-#include "offload.h"
 #include "ppkernel.h"
 
 #ifdef __PAPI
@@ -26,24 +24,24 @@ void initialize_particle(int nPart, double box)
 {
     int n, m, d;
     long seed = 16435234;
-    part.pos.x = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
-    part.pos.y = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
-    part.pos.z = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
-    part.acc.x = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
-    part.acc.y = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
-    part.acc.z = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
-    part.mass  = (PRECTYPE*)memalign(ALIGNCNT, sizeof(PRECTYPE)*nPart);
+    part.pos.x = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
+    part.pos.y = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
+    part.pos.z = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
+    part.acc.x = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
+    part.acc.y = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
+    part.acc.z = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
+    part.mass  = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
 
     for (n=0; n<nPart; n++) {
          part.pos.x[n] = box*ran3(&seed);
          part.pos.y[n] = box*ran3(&seed);
          part.pos.z[n] = box*ran3(&seed);
-//         part.pos.x[n] = (PRECTYPE) 0.0;
-//         part.pos.y[n] = (PRECTYPE) 0.0;
-//         part.pos.z[n] = (PRECTYPE) n;
-         part.acc.x[n] = (PRECTYPE) 0.0;
-         part.acc.y[n] = (PRECTYPE) 0.0;
-         part.acc.z[n] = (PRECTYPE) 0.0;
+//         part.pos.x[n] = (Real) 0.0;
+//         part.pos.y[n] = (Real) 0.0;
+//         part.pos.z[n] = (Real) n;
+         part.acc.x[n] = (Real) 0.0;
+         part.acc.y[n] = (Real) 0.0;
+         part.acc.z[n] = (Real) 0.0;
     }
     for (n=0; n<nPart; n++) {
          part.mass[n] = 0.25;
@@ -57,8 +55,8 @@ int main(int argc, char *argv[])
     double tstart, tstop, ttime;
     double gflops = 0.0;
     float a = 1.1;
-//	PRECTYPE eps = 1.0/100.0/40.0;
-	PRECTYPE eps = 0.00026;
+//	Real eps = 1.0/100.0/40.0;
+	Real eps = 0.00026;
 #ifdef __PAPI
 	int EventSet = PAPI_NULL;
 	long long value;
@@ -128,19 +126,19 @@ int main(int argc, char *argv[])
 	nMIC1 = nPart - nCPU - nMIC0;
 	printf ("nCPU=%d, nMIC0=%d, nMIC1=%d.\n", nCPU, nMIC0, nMIC1);
 
-	PRECTYPE *px = part.pos.x;
-	PRECTYPE *py = part.pos.y;
-	PRECTYPE *pz = part.pos.z;
-	PRECTYPE *mass = part.mass;
-	PRECTYPE *ax = part.acc.x;
-	PRECTYPE *ay = part.acc.y;
-	PRECTYPE *az = part.acc.z;
-	PRECTYPE *ax0 = part.acc.x + nCPU;
-	PRECTYPE *ay0 = part.acc.y + nCPU;
-	PRECTYPE *az0 = part.acc.z + nCPU;
-	PRECTYPE *ax1 = part.acc.x + nCPU + nMIC0;
-	PRECTYPE *ay1 = part.acc.y + nCPU + nMIC0;
-	PRECTYPE *az1 = part.acc.z + nCPU + nMIC0;
+	Real *px = part.pos.x;
+	Real *py = part.pos.y;
+	Real *pz = part.pos.z;
+	Real *mass = part.mass;
+	Real *ax = part.acc.x;
+	Real *ay = part.acc.y;
+	Real *az = part.acc.z;
+	Real *ax0 = part.acc.x + nCPU;
+	Real *ay0 = part.acc.y + nCPU;
+	Real *az0 = part.acc.z + nCPU;
+	Real *ax1 = part.acc.x + nCPU + nMIC0;
+	Real *ay1 = part.acc.y + nCPU + nMIC0;
+	Real *az1 = part.acc.z + nCPU + nMIC0;
 #pragma offload target(mic:0) in (px[0:nPart]:alloc_if(1) free_if(0)) in (py[0:nPart]:alloc_if(1) free_if(0)) in (pz[0:nPart]:alloc_if(1) free_if(0)) in (mass[0:nPart]:alloc_if(1) free_if(0)) out (ax0[0:nMIC0]:alloc_if(1) free_if(0)) out (ay0[0:nMIC0]:alloc_if(1) free_if(0)) out (az0[0:nMIC0]:alloc_if(1) free_if(0)) signal(nMIC0)
 {
 	int n;

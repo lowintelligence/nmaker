@@ -1,5 +1,19 @@
 ***********************************************
-Changes from last update to Dec 9, 2014:
+Changes from last update to Januray 23, 2015:
+-----------------------------------------------
+	1. Redesign of the basic data structure, for particles, domains.
+	2. Using input file instead of program varibles.
+	3. A new global simulation procedure.
+	4. Local particles are stored seperatedly from adjoining ones, but two parts are memory successively.
+	5. Rewrote the traversal procedure, more tuning options for MIC.
+	6. Added the coefficient in PP calculation.
+	7. Cleaning the head files.
+	8. Added the development reference documentation file.
+	9. Other forgotten minor changes, see FIXES file.
+***********************************************
+
+***********************************************
+Changes from last update to December 9, 2014:
 -----------------------------------------------
 	1. Fixed the bug in sampling and data initialization.
 	2. Using a smaller data structure to do the MIC transfering and computing.

@@ -1,46 +1,183 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-#include <sys/time.h>
-#include <malloc.h>
+#include "ppkernel.h"
+
 #ifdef __MULTI_THREAD_
+#include "proto.h"
+#include "nmk_utils.h"
 #include <omp.h>
+#define NMK_NAIVE_GRAVITY
+#else
+#include "global.h"
 #endif
 
-#include "ppkernel.h"
-//#include "dtime.h"
+#include <math.h>
+#include <assert.h>
 
-__OffloadFunc_Macro__
-double dtime()
+#define RSQRTPI 1.772453850905516027298
+
+int packarray3(CalcBody* pp, int n, Array3 pa)
 {
-	double tseconds = 0.0;
-	struct timeval mytime;	
-	gettimeofday(&mytime, (struct timezone*)0);
-	tseconds = (double)(mytime.tv_sec + mytime.tv_usec*1.0e-6);
-	return (tseconds);
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i] = pp[i].pos[0];
+			pa.y[i] = pp[i].pos[1];
+			pa.z[i] = pp[i].pos[2];
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i] = 0;
+			pa.y[i] = 0;
+			pa.z[i] = 0;
+		}
+	}
+}
+
+int packarray3m(CalcBody* pp, int n, Array3 pa, Real *mass)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i] = pp[i].pos[0];
+			pa.y[i] = pp[i].pos[1];
+			pa.z[i] = pp[i].pos[2];
+			mass[i] = pp[i].mass;
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i] = 0;
+			pa.y[i] = 0;
+			pa.z[i] = 0;
+			mass[i] = 0;
+		}
+	}
+}
+
+int packarray3o(CalcBody* pp, int offset, int n, Array3 pa)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = pp[i].pos[0];
+			pa.y[i+offset] = pp[i].pos[1];
+			pa.z[i+offset] = pp[i].pos[2];
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = 0;
+			pa.y[i+offset] = 0;
+			pa.z[i+offset] = 0;
+		}
+	}
+}
+
+int packarray3om(CalcBody* pp, int offset, int n, Array3 pa, Real *mass)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	if(pp)
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = pp[i].pos[0];
+			pa.y[i+offset] = pp[i].pos[1];
+			pa.z[i+offset] = pp[i].pos[2];
+			mass[i+offset] = pp[i].mass;
+		}
+	}
+	else
+	{
+		for (i=0;i<n;i++)
+		{
+			pa.x[i+offset] = (Real) 0;
+			pa.y[i+offset] = (Real) 0;
+			pa.z[i+offset] = (Real) 0;
+			mass[i+offset] = (Real) 0;
+		}
+	}
+}
+
+int pusharray3(CalcBody* pp, int n, Array3 pa)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	assert(pp);
+		
+	for (i=0;i<n;i++)
+	{
+		pp[i].acc[0] += pa.x[i];
+		pp[i].acc[1] += pa.y[i];
+		pp[i].acc[2] += pa.z[i];
+	}
+}
+
+int pusharray3m(CalcBody* pp, int n, Array3 pa, Real m)
+{
+	int i;
+//	pa.x = pa.y = pa.z = NULL;
+	assert(pp);
+		
+	for (i=0;i<n;i++)
+	{
+		pp[i].acc[0] += pa.x[i]*m;
+		pp[i].acc[1] += pa.y[i]*m;
+		pp[i].acc[2] += pa.z[i]*m;
+	}
 }
 
 int get_block_tnum(int bid)
 {
-//	return omp_get_num_threads();
+#ifdef __MULTI_THREAD_
+	return omp_get_num_threads();
+#else
+	return 1;
+#endif
 }
 
 int get_block_tid(int bid)
 {
-//	return omp_get_thread_num();
+#ifdef __MULTI_THREAD_
+	return omp_get_thread_num();
+#else
+	return 0;
+#endif
 }
 
 #ifdef __MULTI_THREAD_
-int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C)
+int ppkernel(Array3 A, int la, Array3 B, int lb, Real eps2, Array3 C)
 #else
-int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tnum, int tid)
+int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C, int tnum, int tid)
 #endif
 {
     int n;
-    double tstart, tstop, ttime;
 
-    /*
+#ifndef __MULTI_THREAD_
+	Real eps2 = constants->EPS2;
+	Real invrs = (Real) 1.0 / constants->SPLIT_SCALE;
+	Real invrs2 = (Real) -0.5 * invrs * invrs;
+	Real invpirs = (Real) RSQRTPI * invrs;
+	Real inv2rs = (Real) 0.5 * invrs;
+	Real rc = constants->CUTOFF_SCALE;
+	Real G = constants->GRAV_CONST;
+#endif
+    /* Origin version of ppkernel 
     printf("Starting Compute\n");
     
     tstart = dtime();
@@ -66,17 +203,21 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
     printf("dtime = %lf \n", ttime);
     */
 
-//    tstart = dtime();
 
-//#pragma omp parallel
+#ifdef __MULTI_THREAD_
+    double tstart, tstop, ttime;
+    tstart = dtime();
+
+#pragma omp parallel
+#endif
 	{
 		int j, k, m, nb, mb, nt, mt;
 
-		PRECTYPE x2, y2, z2, ax2, ay2, az2;
-		PRECTYPE dx1, dy1, dz1, dr21, dr31;
-		PRECTYPE dx2, dy2, dz2, dr22, dr32;
-		PRECTYPE dx3, dy3, dz3, dr23, dr33;
-		PRECTYPE dx4, dy4, dz4, dr24, dr34;
+		Real x2, y2, z2, ax2, ay2, az2;
+		Real dx1, dy1, dz1, dd1, dg1, dr1, dr21, dr31;
+		Real dx2, dy2, dz2, dd2, dg2, dr2, dr22, dr32;
+		Real dx3, dy3, dz3, dd3, dg3, dr3, dr23, dr33;
+		Real dx4, dy4, dz4, dd4, dg4, dr4, dr24, dr34;
 
 #ifdef __MULTI_THREAD_
 		int tid, tnum;
@@ -135,12 +276,26 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 								dy1 = B.y[k] - y2;
 								dz1 = B.z[k] - z2;
 
+#ifdef NMK_NAIVE_GRAVITY
 								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef __single_prec
-								dr31 = ((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21);
+#ifdef NMK_SINGLE_PREC
+								dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
 								dr31 = INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+								dr1 = SQRT(dd1);
+								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+								dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+								dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#endif // NMK_NAIVE_GRAVITY
 
 								ax2 += dx1*dr31 ;
 								ay2 += dy1*dr31 ;
@@ -193,6 +348,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 #endif				
 #endif
 
+#ifdef NMK_NAIVE_GRAVITY
 								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #if (UNROLL > 1)                                     
 								dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
@@ -205,14 +361,14 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 			//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
 #endif
 #endif
-#ifdef __single_prec
-								dr31 = ((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21);
+#ifdef NMK_SINGLE_PREC
+								dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #if (UNROLL > 1)                                                  
-								dr32 = ((PRECTYPE) 1.0) / SQRT(dr22 * dr22 * dr22);
+								dr32 = ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
 #if (UNROLL >= 4)                                                 
-								dr33 = ((PRECTYPE) 1.0) / SQRT(dr23 * dr23 * dr23);
+								dr33 = ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
 																			  
-								dr34 = ((PRECTYPE) 1.0) / SQRT(dr24 * dr24 * dr24);
+								dr34 = ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
 #endif
 #endif
 #else
@@ -226,6 +382,53 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 #endif
 #endif
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+								dr1 = SQRT(dd1);
+								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dr21 = eps2+dd1;
+#if (UNROLL > 1)
+								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
+								dr2 = SQRT(dd2);
+								dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+								dr22 = eps2+dd2;
+#if (UNROLL >=4)
+								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
+								dr3 = SQRT(dd3);
+								dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+								dr23 = eps2+dd3;
+
+								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
+								dr4 = SQRT(dd4);
+								dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+								dr24 = eps2+dd4;
+#endif
+#endif
+
+#ifdef NMK_SINGLE_PREC
+								dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                                                        
+								dr32 = dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                                                       
+								dr33 = dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
+									          									  
+								dr34 = dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#else // NMK_SINGLE_PREC
+								dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                             
+								dr32 = dg2 * INVSQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                            
+								dr33 = dg3 * INVSQRT(dr23 * dr23 * dr23);
+                                             
+								dr34 = dg4 * INVSQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#endif // NMK_SINGLE_PREC
+
+#endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
 								ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
@@ -291,12 +494,26 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 							dy1 = B.y[k] - y2;
 							dz1 = B.z[k] - z2;
 
+#ifdef NMK_NAIVE_GRAVITY
 							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef __single_prec
-							dr31 = ((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21);
+#ifdef NMK_SINGLE_PREC
+							dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
 							dr31 = INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+							dr1 = SQRT(dd1);
+							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+							dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+							dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#endif // NMK_NAIVE_GRAVITY
 
 							ax2 += dx1*dr31 ;
 							ay2 += dy1*dr31 ;
@@ -331,6 +548,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 #endif				
 #endif
 
+#ifdef NMK_NAIVE_GRAVITY
 							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #if (UNROLL > 1)                                     
 							dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
@@ -343,14 +561,14 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 		//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
 #endif
 #endif
-#ifdef __single_prec
-							dr31 = ((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21);
+#ifdef NMK_SINGLE_PREC
+							dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #if (UNROLL > 1)                                                  
-							dr32 = ((PRECTYPE) 1.0) / SQRT(dr22 * dr22 * dr22);
+							dr32 = ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
 #if (UNROLL >= 4)                                                 
-							dr33 = ((PRECTYPE) 1.0) / SQRT(dr23 * dr23 * dr23);
+							dr33 = ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
 																		  
-							dr34 = ((PRECTYPE) 1.0) / SQRT(dr24 * dr24 * dr24);
+							dr34 = ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
 #endif
 #endif
 #else
@@ -364,6 +582,53 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 #endif
 #endif
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+							dr1 = SQRT(dd1);
+							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dr21 = eps2+dd1;
+#if (UNROLL > 1)
+							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
+							dr2 = SQRT(dd2);
+							dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+							dr22 = eps2+dd2;
+#if (UNROLL >=4)
+							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
+							dr3 = SQRT(dd3);
+							dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+							dr23 = eps2+dd3;
+
+							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
+							dr4 = SQRT(dd4);
+							dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+							dr24 = eps2+dd4;
+#endif
+#endif
+
+#ifdef NMK_SINGLE_PREC
+							dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                                                        
+							dr32 = dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                                                       
+							dr33 = dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
+
+							dr34 = dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#else // NMK_SINGLE_PREC
+							dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                             
+							dr32 = dg2 * INVSQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                            
+							dr33 = dg3 * INVSQRT(dr23 * dr23 * dr23);
+
+							dr34 = dg4 * INVSQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#endif // NMK_SINGLE_PREC
+
+#endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
 							ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
@@ -408,12 +673,26 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 					dy1 = y2 - A.y[k];
 					dz1 = z2 - A.z[k];
 
+#ifdef NMK_NAIVE_GRAVITY
 					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef __single_prec
-					dr31 = ((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21);
+#ifdef NMK_SINGLE_PREC
+					dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
 					dr31 = INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+					dr1 = SQRT(dd1);
+					dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+					dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+					dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+					dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#endif // NMK_NAIVE_GRAVITY
 
 					C.x[k] += dx1*dr31 ;
 					C.y[k] += dy1*dr31 ;
@@ -422,24 +701,32 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, PRECTYPE eps2, Array3 C, int tn
 			}
 		}
 	}
-
-//    tstop = dtime();
-//    ttime = tstop - tstart;
-//    printf("dtime = %lf \n", ttime);
-
+#ifdef __MULTI_THREAD_
+    tstop = dtime();
+    ttime = tstop - tstart;
+    printf("dtime = %lf \n", ttime);
+#endif
     return 0;
 }
 
 #ifdef __MULTI_THREAD_
-int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, Array3 C)
+int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Real eps2, Array3 C)
 #else
-int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, Array3 C, int tnum, int tid)
+int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants, Array3 C, int tnum, int tid)
 #endif
 {
     int n;
-    double tstart, tstop, ttime;
 
-    /*
+#ifndef __MULTI_THREAD_
+	Real eps2 = constants->EPS2;
+	Real invrs = (Real) 1.0 / constants->SPLIT_SCALE;
+	Real invrs2 = (Real) -0.5 * invrs * invrs;
+	Real invpirs = (Real) RSQRTPI * invrs;
+	Real inv2rs = (Real) 0.5 * invrs;
+	Real rc = constants->CUTOFF_SCALE;
+	Real G = constants->GRAV_CONST;
+#endif
+    /* Original ppkernel with mass.
     printf("Starting Compute\n");
     
     tstart = dtime();
@@ -451,7 +738,7 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
             dz1 = B.z[m] -  A.z[n];
             
             dr21 = eps2 + dx*dx + dy*dy + dz*dz;
-            dr31 = SQRT(dr2)*dr2;
+            dr31 = Bm[m]*SQRT(dr2)*dr2;
             
             C.x[n] += dx1/dr31;
             C.y[n] += dy1/dr31;
@@ -465,17 +752,20 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
     printf("dtime = %lf \n", ttime);
     */
 
-//    tstart = dtime();
+#ifdef __MULTI_THREAD_
+    double tstart, tstop, ttime;
+    tstart = dtime();
 
-//#pragma omp parallel
+#pragma omp parallel
+#endif
 	{
 		int j, k, m, nb, mb, nt, mt;
 
-		PRECTYPE x2, y2, z2, ax2, ay2, az2;
-		PRECTYPE dx1, dy1, dz1, dr21, dr31;
-		PRECTYPE dx2, dy2, dz2, dr22, dr32;
-		PRECTYPE dx3, dy3, dz3, dr23, dr33;
-		PRECTYPE dx4, dy4, dz4, dr24, dr34;
+		Real x2, y2, z2, ax2, ay2, az2;
+		Real dx1, dy1, dz1, dd1, dg1, dr1, dr21, dr31;
+		Real dx2, dy2, dz2, dd2, dg2, dr2, dr22, dr32;
+		Real dx3, dy3, dz3, dd3, dg3, dr3, dr23, dr33;
+		Real dx4, dy4, dz4, dd4, dg4, dr4, dr24, dr34;
 
 #ifdef __MULTI_THREAD_
 		int tid, tnum;
@@ -532,12 +822,26 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 								dy1 = B.y[k] - y2;
 								dz1 = B.z[k] - z2;
 
+#ifdef NMK_NAIVE_GRAVITY
 								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef __single_prec
-								dr31 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21));
+#ifdef NMK_SINGLE_PREC
+								dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
 #else
 								dr31 = Bm[k] * INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+								dr1 = SQRT(dd1);
+								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+								dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+								dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#endif // NMK_NAIVE_GRAVITY
 
 								ax2 += dx1*dr31 ;
 								ay2 += dy1*dr31 ;
@@ -590,6 +894,7 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 #endif				
 #endif
 
+#ifdef NMK_NAIVE_GRAVITY
 								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #if (UNROLL > 1)                                     
 								dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
@@ -602,14 +907,14 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 			//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
 #endif
 #endif
-#ifdef __single_prec
-								dr31 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21));
+#ifdef NMK_SINGLE_PREC
+								dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
 #if (UNROLL > 1)                                                  
-								dr32 = Bm[k+N_CACHE/UNROLL] * (((PRECTYPE) 1.0) / SQRT(dr22 * dr22 * dr22));
+								dr32 = Bm[k+N_CACHE/UNROLL] * (((Real) 1.0) / SQRT(dr22 * dr22 * dr22));
 #if (UNROLL >= 4)                                                 
-								dr33 = Bm[k+2*N_CACHE/UNROLL] * (((PRECTYPE) 1.0) / SQRT(dr23 * dr23 * dr23));
+								dr33 = Bm[k+2*N_CACHE/UNROLL] * (((Real) 1.0) / SQRT(dr23 * dr23 * dr23));
 																			  
-								dr34 = Bm[k+3*N_CACHE/UNROLL] * (((PRECTYPE) 1.0) / SQRT(dr24 * dr24 * dr24));
+								dr34 = Bm[k+3*N_CACHE/UNROLL] * (((Real) 1.0) / SQRT(dr24 * dr24 * dr24));
 #endif
 #endif
 #else
@@ -623,6 +928,53 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 #endif
 #endif
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+								dr1 = SQRT(dd1);
+								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dr21 = eps2+dd1;
+#if (UNROLL > 1)
+								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
+								dr2 = SQRT(dd2);
+								dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+								dr22 = eps2+dd2;
+#if (UNROLL >=4)
+								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
+								dr3 = SQRT(dd3);
+								dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+								dr23 = eps2+dd3;
+
+								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
+								dr4 = SQRT(dd4);
+								dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+								dr24 = eps2+dd4;
+#endif
+#endif
+
+#ifdef NMK_SINGLE_PREC
+								dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                                                        
+								dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                                                                             
+								dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
+									                                									  
+								dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#else // NMK_SINGLE_PREC
+								dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                             
+								dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * INVSQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                                                  
+								dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * INVSQRT(dr23 * dr23 * dr23);
+                                                                   
+								dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * INVSQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#endif // NMK_SINGLE_PREC
+
+#endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
 								ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
@@ -688,12 +1040,26 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 							dy1 = B.y[k] - y2;
 							dz1 = B.z[k] - z2;
 
+#ifdef NMK_NAIVE_GRAVITY
 							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef __single_prec
-							dr31 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21));
+#ifdef NMK_SINGLE_PREC
+							dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
 #else
 							dr31 = Bm[k] * (INVSQRT(dr21 * dr21 * dr21));
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+							dr1 = SQRT(dd1);
+							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+							dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+							dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#endif // NMK_NAIVE_GRAVITY
 
 							ax2 += dx1*dr31 ;
 							ay2 += dy1*dr31 ;
@@ -728,6 +1094,7 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 #endif				
 #endif
 
+#ifdef NMK_NAIVE_GRAVITY
 							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #if (UNROLL > 1)                                     
 							dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
@@ -740,14 +1107,14 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 		//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
 #endif
 #endif
-#ifdef __single_prec
-							dr31 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21));
+#ifdef NMK_SINGLE_PREC
+							dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
 #if (UNROLL > 1)                                                  
-							dr32 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr22 * dr22 * dr22));
+							dr32 = Bm[k] * (((Real) 1.0) / SQRT(dr22 * dr22 * dr22));
 #if (UNROLL >= 4)                                                 
-							dr33 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr23 * dr23 * dr23));
+							dr33 = Bm[k] * (((Real) 1.0) / SQRT(dr23 * dr23 * dr23));
 																		  
-							dr34 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr24 * dr24 * dr24));
+							dr34 = Bm[k] * (((Real) 1.0) / SQRT(dr24 * dr24 * dr24));
 #endif
 #endif
 #else
@@ -761,6 +1128,53 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 #endif
 #endif
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+							dr1 = SQRT(dd1);
+							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dr21 = eps2+dd1;
+#if (UNROLL > 1)
+							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
+							dr2 = SQRT(dd2);
+							dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+							dr22 = eps2+dd2;
+#if (UNROLL >=4)
+							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
+							dr3 = SQRT(dd3);
+							dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+							dr23 = eps2+dd3;
+
+							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
+							dr4 = SQRT(dd4);
+							dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+							dr24 = eps2+dd4;
+#endif
+#endif
+
+#ifdef NMK_SINGLE_PREC
+							dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                                                        
+							dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                                                                             
+							dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
+
+							dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#else // NMK_SINGLE_PREC
+							dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+#if (UNROLL > 1)                             
+							dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * INVSQRT(dr22 * dr22 * dr22);
+#if (UNROLL >= 4)                                                  
+							dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * INVSQRT(dr23 * dr23 * dr23);
+
+							dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * INVSQRT(dr24 * dr24 * dr24);
+#endif
+#endif
+#endif // NMK_SINGLE_PREC
+
+#endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
 							ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
@@ -805,12 +1219,26 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 					dy1 = y2 - A.y[k];
 					dz1 = z2 - A.z[k];
 
+#ifdef NMK_NAIVE_GRAVITY
 					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef __single_prec
-					dr31 = Bm[k] * (((PRECTYPE) 1.0) / SQRT(dr21 * dr21 * dr21));
+#ifdef NMK_SINGLE_PREC
+					dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
 #else
 					dr31 = Bm[k] * INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#else // NMK_NAIVE_GRAVITY
+					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+					dr1 = SQRT(dd1);
+					dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+					dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+					dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+					dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#endif // NMK_NAIVE_GRAVITY
 
 					C.x[k] += dx1*dr31 ;
 					C.y[k] += dy1*dr31 ;
@@ -820,9 +1248,11 @@ int ppmkernel(Array3 A, int la, Array3 B, PRECTYPE *Bm, int lb, PRECTYPE eps2, A
 		}
 	}
 
-//    tstop = dtime();
-//    ttime = tstop - tstart;
-//    printf("dtime = %lf \n", ttime);
+#ifdef __MULTI_THREAD_
+    tstop = dtime();
+    ttime = tstop - tstart;
+    printf("dtime = %lf \n", ttime);
+#endif
 
     return 0;
 }

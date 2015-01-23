@@ -1,12 +1,12 @@
 /*
  * =====================================================================================
  *
- *       Filename:  dtime.c
+ *       Filename:  nmk_utils.h
  *
- *    Description:  call gettimeofday()
+ *    Description:  Including the headers for nmaker code utilities.
  *
  *        Version:  1.0
- *        Created:  07/25/2014 04:20:28 PM
+ *        Created:  12/11/2014 06:30:46 PM
  *       Revision:  none
  *       Compiler:  gcc
  *
@@ -15,14 +15,11 @@
  *
  * =====================================================================================
  */
+
+#ifndef _NMK_UTILS_H_
+#define _NMK_UTILS_H_
+
+#include "dbginfo.h"
 #include "dtime.h"
 
-double dtime()
-{
-	double tseconds = 0.0;
-	struct timeval mytime;	
-	gettimeofday(&mytime, (struct timezone*)0);
-	tseconds = (double)(mytime.tv_sec + mytime.tv_usec*1.0e-6);
-	return (tseconds);
-}
-
+#endif

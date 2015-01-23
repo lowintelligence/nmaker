@@ -1,17 +1,8 @@
-#ifndef PARTITION_H
-#define PARTITION_H
+#ifndef _PARTITION_H_
+#define _PARTITION_H_
 
-#include "domain.h"
-#include "data.h"
-#include <mpi.h>
-#include <pthread.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include "parameter.h"
+#include "global.h"
 
-void decompose_domain(Domain* dp, GlobalParam *gp);
+void decompose_system(Constants *constants, Status *status, System *sys);
 
-
-#endif /* PARTITION_H */
-
+#endif /* _PARTITION_H_ */

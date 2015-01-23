@@ -1,0 +1,69 @@
+**********************************************************************
+
+FILE:
+	dtime.h
+
+Description:
+	Define and implement a function which returns a double style timestamp, the system call gettimeofday() is used.
+
+Function call:
+	double dtime();
+
+**********************************************************************
+
+
+**********************************************************************
+
+FILE:
+	dbginfo.h
+
+Description:
+	Define the Macros and external varibles needed by general information displaying and debug information output.
+
+Tags & Varibles:
+	"NMK_DEBUG" should be defined while compiling to make the DBG_* Macros working.
+	"NMK_DBG_STDOUT" outputing the debug information to stdout if this is defined. 
+	"int log_level" should be avail in the context while use the LOG_* Macros.
+	"int dbg_level" should be avail in the context while use the DBG_* Macros.
+
+	log_level and logcode should be:
+		LOG_COMMON
+		LOG_FATAL
+		LOG_VB1
+		LOG_VB2
+		LOG_TMP
+		LOG_ALL
+
+	dbg_level and dbgcode should be:
+		DBG_MEMORY
+		DBG_DATA
+		DBG_CALC
+		DBG_LOGIC
+		DBG_TIME
+		DBG_TMP
+		DBG_ALL
+
+Functional Macros:
+	LOG_INFOL(logcode, fmt, ...)
+	LOG_INFOFL(logcode, logfile, fmt, ...)
+	LOG_INFO(logcode, fmt, ...)
+	LOG_INFOF(logcode, logfile, fmt, ...)
+	CLOG(fmt, ...)
+	CLOGF(logfile, fmt, ...)
+	DBG_INFOL(dbgcode, fmt, ...)
+	DBG_INFOFL(dbgcode, dbgfile, fmt, ...)
+	DBG_INFO(dbgcode, fmt, ...)
+	DBG_INFOF(dbgcode, dbgfile, fmt, ...)
+
+	"logcode/dbgcode" information tags to indicate which type the message is.
+	"logfile/dbgfile" is the file handle pointer indicating where the message should be output.
+	"fmt" the formation string in C style fprintf function.
+
+	LOG_INFO/DBG_INFO just output the message to stdout or stderr.
+	LOG_INFOL/DBG_INFOL output the message to stdout or stderr with the filename and line number of the caller.
+	LOG_INFOF/DBG_INFOF just output the message to the file logfile or dbgfile.
+	LOG_INFOFL/DBG_INFOFL output the message to logfile or dbgfile with the filename and line number of the caller.
+	CLOG output the message as LOG_COMMON level log to the stdout.
+	CLOGF output the message as LOG_COMMON level log to logfile.
+
+**********************************************************************

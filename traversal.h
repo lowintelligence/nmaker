@@ -1,36 +1,39 @@
 #ifndef _TRAVERSAL_H_
 #define _TRAVERSAL_H_
 
-#define _GNU_SOURCE
-#include <sched.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <malloc.h>
-
-#include "data.h"
-#include "dtime.h"
-#include "offload.h"
+#include "global.h"
 #include "domain.h"
-#include "subtree.h"
-#include "parameter.h"
-#include "subcuboid.h"
-#include "ppkernel.h"
 #include "queue.h"
+#include "ppkernel.h"
 
 #define SQROOT3 1.73205080705688773
 
-// Qiao's functions.
-//int accepted_cell_branes(int one, int ns, Node *tree, Body *part);
-//void naive_walk_cell(int add, int level, int body, Node *tree, Body *part);
-//void inner_traversal(Domain *dp, GlobalParam *gp, int nThread);
+typedef struct _dttblock
+{
+	int blockid;//id in one block
+	int teamid;// id of team
+	int nSlave;
 
-// Cao!'s functions.
+	long counter;
+
+	TWQ* pq_tw;
+	Domain* dp;
+	Constants* constants;
+	PPParameter *pppar;
+
+	pthread_mutex_t *mutex;
+	pthread_barrier_t *bar;
+
+    int* gridP;
+	int* curIndex;	
+} DttBlock;
+
 __OffloadFunc_Macro__
-int accepted_cell_to_cell(int TA, int TB, double theta);
+int accepted_cell_to_cell(Int TA, Int TB, double theta);
 
 __OffloadFunc_Macro__
-int dtt_process_cell(int TA, int TB, double theta, TWQ* PQ_treewalk, Block* pth);
+int dtt_process_cell(Int TA, Int TB, TWQ* pq_tw, void *param);
 
-void dtt_traversal(Domain *dp, GlobalParam *gp);
+void tree_traversal(Domain *dp, Constants *constants);
 
-#endif /* TRAVERSAL_H */
+#endif /* _TRAVERSAL_H_ */

@@ -19,17 +19,16 @@
 #ifndef _OFFLOAD_H_
 #define _OFFLOAD_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/time.h>
-#include <pthread.h>
-
 #ifdef __INTEL_OFFLOAD 
-	#define __OffloadVar_Macro__ __declspec(target(mic)) 
-	#define __OffloadFunc_Macro__ __attribute__ ((target(mic)))
-#else
-	#define __OffloadVar_Macro__
-	#define __OffloadFunc_Macro__
-#endif
 
-#endif
+#define __OffloadVar_Macro__ __declspec(target(mic)) 
+#define __OffloadFunc_Macro__ __attribute__ ((target(mic)))
+
+#else /* __INTEL_OFFLOAD */
+
+#define __OffloadVar_Macro__
+#define __OffloadFunc_Macro__
+
+#endif /* __INTEL_OFFLOAD */
+
+#endif /* _OFFLOAD_H_ */

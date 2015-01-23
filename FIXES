@@ -1,0 +1,144 @@
+******************2015/01/21 22:00********************
+proto.h
+global.h
+inital.c
+traversal.h
+ppkernel.h
+ppkernel.c
+	Add the prefactor in PP calculation. G(erfc(r/2rs) + (r/(sqrt(pi)*rs)*exp(-r^2/2s^2))) * oldfactor.
+	Modified the EPS2 into constants structure, and PP use the *constants as an parameter.
+	Add NMK_NAIVE_GRAVITY for naive gravity calculation.
+
+main.c
+partmesh.c
+	Setting FFTW2_LIB as default, since MKL doesn't support FFTW3 MPI interface.
+
+******************2015/01/13 13:00********************
+traversal.c
+	Modified some judge critierian in DTT tree walking on MIC to raise the performance.
+
+traversal.c
+initial.h
+initial.c
+global.c
+	Add the INPUT VARIBLES and functions for CPU-MIC load balancing.
+		DYNAMIC_LOAD/DYNLOAD: if non zero, enable the load balancing.
+
+******************2015/01/13 1:00********************
+traversal.c
+	Modified DTT process logic, if A and B are equal in size, seperate A first (B in old versions). If A is leaf, using a DST for B tree entirely, avoid more queue operations. If B's childrens are leaf nodes, also add it to A's pp, instead of enqueue operations.
+
+******************2015/01/12 14:00********************
+global.h
+initial.h
+initial.c
+	Made the chages for this INPUT VARIBLES:
+		(varible name/input string: usage notes.)
+		NTHREAD_CPU/NTHCPU: CPU thread numbers per MPI PROCESS while tree walking.
+		NTHREAD_MIC/NTHMIC: MIC thread numbers per MIC CARD.
+		NTHREAD_TREE/NTHTREE: CPU thread numbers per MPI PROCESS for tree building (coz of sometimes too many threads will get an segmentation fault in tree building).
+		NP_PER_NODE/NPNODE: the number of how many MPI PROCESSes in one node.
+		NMIC_PER_NODE/MICNUM: the number of MICs in one node.
+		NTEAM_CPU/NTEAMCPU: master thread numbers for task pools on CPU in single MPI PROCESS.
+		NTEAM_MIC/NTEAMMIC: master thread numbers for task pools on MIC in single MPI PROCESS.
+		CPU_RATIO/CPURATIO: the ratio to indicate how much calculation should be done on CPU in tree walking.
+		RND_PART/RNDPART: if not 0, random uniform distributed particles should be generated instead of file reading.
+		MAX_TREE_LEVEL/TREEMAX: the maximum level of a local tree.
+		MIN_TREE_LEVEL/TREEMIN: the minimum level of a local tree.
+		MAX_PACKAGE_SIZE/NCRITI: the normal Ncritical in tree building.
+		MIC_PP_THRESHOLD/PPSIZE: the Ncritical used on MIC while tree walking.
+	Added init_random_particles() function.
+	Added a section to check the particles not equal to BOX_SIZE due to precision issue.
+
+dbginfo.h
+	Added extern definition of 'stdio' functions and varibles for correctly offload on MIC.
+
+domain.h
+domain.c
+	Added nnode varibles to remember the number of tree nodes malloced for offloading to MIC.
+
+global.h
+global.c
+	Modified the MPI_Abort() to exit() for offload compilation in system_exit() since MPI_Abort() could not be offloaded.
+	Added xmemalign() function for aligned memory allocation.
+
+proto.h
+	Added CalcBode and TransBody structure for force calculation and transfering.
+	Added rmax to Node stucture to use in acceptance judging.
+	
+main.c <-- driver.c
+	Added timer sections, warmup to MIC function, and tree building and walking functions..
+	
+subtree.h
+subtree.c
+queue.h
+queue.c
+traversal.h
+traversal.c	
+	Tree building and force calculation functions. Cleared from old version, using new data structures.
+
+pp.c
+ppm.c
+ppkernel.h
+ppkernel.c
+Makefile
+	Moved from old version, with minor modification.
+	
+******************2015/01/05 22:00********************
+initial.c
+	Correct the char array length of 'name' and 'value'.
+
+stepping.c
+	Included 'math.h'.
+	Strictly modified draft() function to adjust border particles correction about its precision.
+
+******************2015/01/05 12:00********************
+nmk_utils.h:
+	New file for utility functions. Now including dbginfo macros and dtime() function.
+
+dbginfo.h:
+	Macros for log and debug info output.
+
+dtime.h:
+	dtime() implementation.
+
+offload.h:
+	Offload macros defination.
+
+global.h:
+global.c:
+	Moving dtime() to dtime.h.
+	Added xrealloc() function.
+
+partition.c:
+	MESH_BITS and PEANO bits need to be equal now, one mesh could not be seperated in two MPI processes. Then 'upper' mesh should be exclude in current domain.
+
+domain.h:
+domain.c:
+	Added rank, nproc vars in Domain structure.
+	Added *tree, *mroot, *pidx to indicate the local tree nodes, root of each mesh, first particle index of each meshes.
+	Modified the domain creation and deletion process.
+	Deleted *cuboid.
+	The mesh 'upper' should be not include in local domain since no mesh should be splited (peano_bits==mesh_bits).
+	Corrected the bug in adjoint counting. see 'if (x<0 || x>=In) continue;' etc.
+	Combine the particle data with adjointed particles.
+	Strictly modified the adjointed particle processing functions in broadcast_frontiers.
+
+******************2015/01/01 00:00********************
+proto.h
+global.h
+global.c
+initial.h
+initial.c
+partition.h
+partition.c
+partmesh.h
+partmesh.c
+driver.h
+driver.c
+iosnap.h
+iosnap.c
+stepping.h
+stepping.c
+	Based on the new PM code with new structure.
+******************************************************
