@@ -5,8 +5,8 @@ REDSHIFT      49.0
 OPENANGL      0.3
 BOXSIZE       100000.0
 SOFTING       10.0
-MESHPOW       4
-PEANOBIT      4
+MESHPOW       1
+PEANOBIT      1
 NUMPART       2097152
 NTHCPU        4
 NTHMIC        240
@@ -21,4 +21,4 @@ TREEMIN       1
 NCRITI        128
 PPSIZE        2048
 RNDPART       1
-ICPATH        /home/zycao/code/ic_128
+ICPATH        ./data/ic_128

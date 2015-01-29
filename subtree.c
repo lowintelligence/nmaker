@@ -3,7 +3,7 @@
 #include "subtree.h"
 #include <assert.h>
 
-static double factor_part_node = 0.3;
+static double factor_part_node = 1;
 // new space to build tree as a uint to sent to the other domain or node
 // build top-subtree
 // the tree must be smoothed during tree-traveral
@@ -42,6 +42,7 @@ void check_subtree(Domain *dp, Constants *constants)
 			if(tree[rooti].nPart!=0 || tree[rooti].nChildren!=0 || tree[rooti].firstChild!=-1 || tree[rooti].firstPart!=-1)
 			{
 				incorrect += 0x100000000L;
+//				DBG_INFO(DBG_TMP, "Hello1.\n");
 			}
 
 			continue;
@@ -51,7 +52,7 @@ void check_subtree(Domain *dp, Constants *constants)
 		if ((dp->tag[i]>=0 && dp->pidx[i]!=dp->npart+n2) || (dp->tag[i]<0 && dp->pidx[i]!=n1) || dp->pidx[i]!=tree[rooti].firstPart)
 		{
 			incorrect += 0x100L;
-			DBG_INFO(DBG_MEMORY, "i=%ld, partindex=%ld, numpart=%ld, treefirstPart=%ld.\n", i, dp->pidx[i],  dp->count[i], tree[rooti].firstPart);
+//			DBG_INFO(DBG_MEMORY, "i=%ld, partindex=%ld, numpart=%ld, treefirstPart=%ld.\n", i, dp->pidx[i],  dp->count[i], tree[rooti].firstPart);
 		}
 		n = dp->tag[i]<0 ? n1 : dp->npart+n2;
 		// Check the mesh group id.
@@ -104,6 +105,7 @@ void check_subtree(Domain *dp, Constants *constants)
 			if(tree[js-1].level!=level-1)
 			{
 				incorrect += 0x10000000000L;
+//				DBG_INFO(DBG_TMP, "[%d] Tree error at level(%d) while (%d).\n", dp->rank, level, tree[js-1].level);
 			}
 			for (j=js; j<je; j++)
 			{
@@ -120,7 +122,6 @@ void check_subtree(Domain *dp, Constants *constants)
 				if(tree[j].firstPart<dp->pidx[i] || tree[j].firstPart+tree[j].nPart>dp->pidx[i]+dp->count[i]) // Particle pointer error.
 				{
 //					printf("i=%ld, j=%ld, je=%ld, js=%ld, ilevel=%d, jlevel=%d, jnpart=%d, jp=%d, meshnp=%d, meshp=%d.\n", i, j, je, js, level, tree[j].level, tree[j].nPart, tree[j].firstPart, dp->count[i], dp->pidx[i]);
-//					sleep(1);
 					incorrect += 0x100;
 				}
 				if(tree[j].nChildren>0)
@@ -142,6 +143,7 @@ void check_subtree(Domain *dp, Constants *constants)
 				if(j!=firstnl)
 				{
 					incorrect += 0x10000000000L;
+					DBG_INFO(DBG_TMP, "[%d] Tree error at firstnl(%ld) while (%ld).\n", dp->rank, firstnl, j);
 				}
 				js = firstnl;
 				je = firstnl+numnl;
@@ -426,11 +428,11 @@ void* build_tree_morton(void *param)
 			sumcenterz += part[ipart+n].pos[2];
 		} //comp the massCenter
 		pnode->nPart = mpart;
-		invnpart = 1 / (Real) pnode->nPart;
+		invnpart = 1.0 / (Real) pnode->nPart;
 		pnode->massCenter[0] = sumcenterx * invnpart;
 		pnode->massCenter[1] = sumcentery * invnpart;
 		pnode->massCenter[2] = sumcenterz * invnpart;
-		Real drmax = (Real) 0.000026;
+		Real drmax = (Real) 0.00026;
 		for (n=0; n<pnode->nPart; n++)
 		{
 			Real dx, dy, dz, dr;
@@ -441,6 +443,7 @@ void* build_tree_morton(void *param)
 			drmax = dr>drmax ? dr : drmax;
 		}
 		pnode->rmax = SQRT(drmax);
+//		DBG_INFO(DBG_TMP, "[Tree]  Tnode[%ld]  %f  %f  %f  mass=%f  rmax=%f\n", pnode-tree, pnode->massCenter[0], pnode->massCenter[1], pnode->massCenter[2], pnode->mass, pnode->rmax);
 		pnode++;
 
 		int level = 1;
@@ -510,11 +513,11 @@ void* build_tree_morton(void *param)
 //					if (m == 211) printf ("[%d]Child, m=%d, pnode=%lx, l=%d, 1p=%d, nP=%d, n=%d, ip=%d, mp=%d.\n", tid, m, prnode, pnode->level, pnode->firstPart, pnode->nPart, n, ipart, mpart);
 //					if (m==211)	printf ("[%d]ChildParent, m=%d, prnode=%lx, root=%d, l=%d, level=%d, 1p=%d, nP=%d, n=%d, ip=%d, mp=%d.\n", tid, m, prnode, root[m], prnode->level, level, prnode->firstPart, prnode->nPart, n, ipart, mpart);
 					lpmask = n;
-					invnpart = 1 / (Real) pnode->nPart;
+					invnpart = 1.0 / (Real) pnode->nPart;
 					pnode->massCenter[0] = sumcenterx * invnpart;
 					pnode->massCenter[1] = sumcentery * invnpart;
 					pnode->massCenter[2] = sumcenterz * invnpart;
-					Real drmax = (Real) 0.000026;
+					Real drmax = (Real) 0.00026;
 					for (i=0; i<pnode->nPart; i++)
 					{
 						Real dx, dy, dz, dr;
@@ -525,6 +528,7 @@ void* build_tree_morton(void *param)
 						drmax = dr>drmax ? dr : drmax;
 					}
 					pnode->rmax = SQRT(drmax);
+//					DBG_INFO(DBG_TMP, "[Tree]  Tnode[%ld]  %f  %f  %f  mass=%f  rmax=%f\n", pnode-tree, pnode->massCenter[0], pnode->massCenter[1], pnode->massCenter[2], pnode->mass, pnode->rmax);
 					pnode++;
 
 					if ( n>=mpart ) 

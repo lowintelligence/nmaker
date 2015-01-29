@@ -165,9 +165,13 @@ void mark_cuboid(Domain *domain)
     int *label = (int*)xmalloc(sizeof(int)*In*Jn*Kn, 6005);
     int lower_mesh, upper_mesh;
     int shift_bit = 3*(domain->peano_bit - domain->mesh_bit);
-    Peano lower, upper;
-    lower = domain->lower[rank]>>shift_bit;
-    upper = domain->upper[rank]>>shift_bit;
+    Peano lower, upper, domainlow, domainup;
+
+	// 1zycao! Using a comparing algorithm instead of finding the key.
+    lower = (domain->upper[rank]>>shift_bit)-1;
+    upper = domain->lower[rank]>>shift_bit;
+	domainlow = upper;
+	domainup = lower;
 
     upper_mesh = lower_mesh = -1;
     for ( i=0; i<In; i++ )
@@ -199,18 +203,24 @@ void mark_cuboid(Domain *domain)
                 else
 				{
                     cubekey = encoding_peano(x, y, z, nbits);
-                    if ( cubekey >= lower && cubekey < upper )
+                    if ( cubekey >= domainlow && cubekey <= domainup )
                         label[idx] = 1;
                     else
                         label[idx] = 0;
 
                     cdkey[idx] = cubekey;
                 }
-//    printf(" lower = %d upper = %d \n", lower, upper);
-                if (lower == cdkey[idx])
+//				printf(" domainlower = %d domainupper = %d \n", domainlow, domainup);
+                if (lower >= cdkey[idx] && cdkey[idx] >= domainlow)
+				{
                     lower_mesh = idx;
-                if ((upper-1) == cdkey[idx])
+					lower = cdkey[idx];
+				}
+                if (upper <= cdkey[idx] && cdkey[idx] <= domainup)
+				{
                     upper_mesh = idx;
+					upper = cdkey[idx];
+				}
             }
         }
     }
@@ -314,10 +324,9 @@ void mark_cuboid(Domain *domain)
         }
     }
 
-
     MPI_Barrier(TREE_COMM_WORLD);
 //    printf("mesh_bit=%d peano_bit=%d\n",domain->mesh_bit,domain->peano_bit);
-
+  
     if ( -1 != upper_mesh ) {
         cubekey = cdkey[upper_mesh];
 
@@ -730,21 +739,21 @@ void broadcast_frontiers(Domain *domain, System *sys)
 	{
 		rgflag |= 0x10;
 	}
-	if (minidx[0] == maxidx[0])
+	if (minidx[0] == maxidx[0] && cm_nside == 1) // cm_nsidex
 	{
 		gmask |= 0x3;
 		xl = 3;
 		dcount++;
 		pcor *= 3;
 	}
-	if (minidx[1] == maxidx[1])
+	if (minidx[1] == maxidx[1] && cm_nside == 1) // cm_nsidey
 	{
 		gmask |= 0xC;
 		yl = 3;
 		dcount++;
 		pcor *= 3;
 	}
-	if (minidx[2] == maxidx[2])
+	if (minidx[2] == maxidx[2] && cm_nside == 1) // cm_nsidez
 	{
 		gmask |= 0x30;
 		zl = 3;
@@ -816,7 +825,9 @@ void broadcast_frontiers(Domain *domain, System *sys)
 				if ( !(flag & rgflag) ) /* !(flag & rgflag) */
 				{
 					idx = (x*Jn + y) * Kn + z;
-					if (tag[idx]>=0)
+//					if (domain->rank == 0)
+//						DBG_INFO(DBG_TMP, "[Adjoin] idx=%d, tag=%d.\n", idx, tag[idx]);
+					if (tag[idx]>=0 && xg>=gminx && xg<=gmaxx && yg>=gminy && yg<=gmaxy && zg>=gminz && zg<=gmaxz)
 					{
 						count[idx] ++;
 						ghost[np_adj+np] = buffrecv[s][nb];
@@ -1194,6 +1205,15 @@ void broadcast_frontiers(Domain *domain, System *sys)
     LOG_INFO(LOG_VB1, "[%d] npart_adj = %d [max=%d]\n", rank, (int)np_adj, (int)np_adj_max);
     domain->npart_adj = np_adj;
 
+//	if (domain->rank == 1)
+//	sleep(domain->nproc - domain->rank);
+//	{
+//		for (i=0; i<In*Jn*Kn; i++)
+//		{
+//			printf("[%d Grid] idx=%d, tag=%d, count=%d.\n", domain->rank, i, tag[i], count[i]);
+//		}
+//	}
+
 	/* Indicate the first particle index of each mesh in the contiguous storage scheme. */
 	npart = 0;
 	np_adj = 0;
@@ -1208,6 +1228,7 @@ void broadcast_frontiers(Domain *domain, System *sys)
 		{
 			domain->pidx[i] = domain->npart + np_adj;
 			np_adj += count[i];
+//			printf("[%d Grid] idx=%d, tag=%d, count=%d, total=%d.\n", domain->rank, i, tag[i], count[i], domain->npart_adj);
 		}
 		if (count[i]==0)
 		{
@@ -1233,27 +1254,6 @@ void broadcast_frontiers(Domain *domain, System *sys)
                 free(buffrecv[s]);
     }
     free(buffrecv);
-
-
-
-    /*
-       if (0==rank) {
-           for (i=0; i<In; i++) {
-               for (j=0; j<Jn; j++) {
-                   for (k=0; k<Kn; k++){
-                       idx = (i*Jn+j)*Kn+k ;
-                       if (tag[idx] >= 0)
-                           printf("%4d ", tag[idx] );
-                       else
-                           printf("%4d ", tag[idx] );
-                   }
-                   printf("\n");
-               }
-               printf("\n");
-           }
-       }
-       */
-
 
     free(req_send);
     free(req_recv);

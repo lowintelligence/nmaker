@@ -300,17 +300,24 @@ int accepted_cell_to_cell(Int TA, Int TB, double theta/* Here theta is the open_
 	double Bmax = 0.0;
 
 	// Tree node include test.
+	if (TA == TB)
+	{
+//		DBG_INFO(DBG_TMP, "[Decline] %f/%f, %f/%f, %f/%f, Rmax=%f, dr=%f, nA=%d, nB=%d.\n", tree[TB].massCenter[0], tree[TA].massCenter[0], tree[TB].massCenter[1], tree[TA].massCenter[1], tree[TB].massCenter[2], tree[TA].massCenter[2], Rmax, dr, tree[TA].nPart, tree[TB].nPart);
+		return 0;
+	}
 	if (tree[TA].level < tree[TB].level)
 	{
-		if (tree[TA].firstPart<=tree[TB].firstPart && tree[TA].firstPart+tree[TA].nPart>=tree[TB].firstPart)
+		if (tree[TA].firstPart<=tree[TB].firstPart && tree[TA].firstPart+tree[TA].nPart>tree[TB].firstPart)
 		{
+//			DBG_INFO(DBG_TMP, "[Decline] %f/%f, %f/%f, %f/%f, Rmax=%f, dr=%f, nA=%d, nB=%d.\n", tree[TB].massCenter[0], tree[TA].massCenter[0], tree[TB].massCenter[1], tree[TA].massCenter[1], tree[TB].massCenter[2], tree[TA].massCenter[2], Rmax, dr, tree[TA].nPart, tree[TB].nPart);
 			return 0;
 		}
 	}
 	else if (tree[TA].level > tree[TB].level)
 	{
-		if (tree[TB].firstPart<=tree[TA].firstPart && tree[TB].firstPart+tree[TB].nPart>=tree[TA].firstPart)
+		if (tree[TB].firstPart<=tree[TA].firstPart && tree[TB].firstPart+tree[TB].nPart>tree[TA].firstPart)
 		{
+//			DBG_INFO(DBG_TMP, "[Decline] %f/%f, %f/%f, %f/%f, Rmax=%f, dr=%f, nA=%d, nB=%d.\n", tree[TB].massCenter[0], tree[TA].massCenter[0], tree[TB].massCenter[1], tree[TA].massCenter[1], tree[TB].massCenter[2], tree[TA].massCenter[2], Rmax, dr, tree[TA].nPart, tree[TB].nPart);
 			return 0;
 		}
 	}
@@ -326,10 +333,12 @@ int accepted_cell_to_cell(Int TA, Int TB, double theta/* Here theta is the open_
 	dr = sqrt(dr) - Bmax;
 	if ( Rmax < theta * dr )
 	{
+//		DBG_INFO(DBG_TMP, "[Accept] %f/%f, %f/%f, %f/%f, Rmax=%f, dr=%f, nA=%d, nB=%d.\n", tree[TB].massCenter[0], tree[TA].massCenter[0], tree[TB].massCenter[1], tree[TA].massCenter[1], tree[TB].massCenter[2], tree[TA].massCenter[2], Rmax, dr, tree[TA].nPart, tree[TB].nPart);
 		return 1;
 	}
 	else
 	{
+//		DBG_INFO(DBG_TMP, "[Decline] %f/%f, %f/%f, %f/%f, Rmax=%f, dr=%f, nA=%d, nB=%d.\n", tree[TB].massCenter[0], tree[TA].massCenter[0], tree[TB].massCenter[1], tree[TA].massCenter[1], tree[TB].massCenter[2], tree[TA].massCenter[2], Rmax, dr, tree[TA].nPart, tree[TB].nPart);
 		return 0;
 	}
 }
@@ -351,6 +360,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 
 	double theta = pth->constants->OPEN_ANGLE;
 	Real partmass = pth->constants->PART_MASS;
+
 	int minlevel = pth->constants->MIN_TREE_LEVEL;
 	int maxlevel = pth->constants->MAX_TREE_LEVEL;
 
@@ -377,10 +387,13 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 			nA = tree[TA].nPart;
 			nB = nA;
 			packarray3(&part[tree[TA].firstPart], nA, pa);
+			packarray3(&part[tree[TA].firstPart], nB, pb);
 			packarray3(NULL, nA, pc);
 			pth->pppar->nA = nA;
 			pth->pppar->nB = nB;
 			pth->pppar->calcm = 0;
+
+//			DBG_INFO(DBG_TMP, "[Accum] TA==TB/Dec  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 
 			pth->counter += nA*(nB*22+2);
 			pthread_barrier_wait(pth->bar);
@@ -409,7 +422,18 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 							pb.y[nB] = tree[TB1].massCenter[1];
 							pb.z[nB] = tree[TB1].massCenter[2];
 							mass[nB] = tree[TB1].mass;
+//							DBG_INFO(DBG_TMP, "[AcceptInfo]  %f  %f  %f  %f  %f  %f\n", pb.x[nB], pb.y[nB], pb.z[nB], mass[nB], tree[TB1].mass,(Real)tree[TB1].nPart*partmass);
+//							int xx;
+//							for (xx=0; xx<tree[TB1].nPart; xx++)
+//							{
+//								pb.x[nB+xx] = tree[TB1].massCenter[0];
+//								pb.y[nB+xx] = tree[TB1].massCenter[1];
+//								pb.z[nB+xx] = tree[TB1].massCenter[2];
+//								mass[nB+xx] = partmass;
+//							}
+//							nB += tree[TB1].nPart;
 							nB += 1;
+//							DBG_INFO(DBG_TMP, "[Accum] TA==TB/TB1_Acc  TA1=%ld, nA=%d, nB=%d, calcm=%d\n", TA1, nA, nB, calcm); 
 						}
 						else
 						{
@@ -417,6 +441,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 							{
 								packarray3om(&part[tree[TB1].firstPart], nB, tree[TB1].nPart, pb, mass);
 								nB += tree[TB1].nPart;
+//								DBG_INFO(DBG_TMP, "[Accum] TA==TB/TB1_Dec  TA1=%ld, nA=%d, nB=%d, calcm=%d\n", TA1, nA, nB, calcm); 
 							}
 							else
 							{
@@ -426,13 +451,13 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 					}
 					if (nB>0)
 					{
+						packarray3(&part[tree[TA1].firstPart], nA, pa);
 						packarray3(NULL, nA, pc);
 						pth->pppar->nA = nA;
 						pth->pppar->nB = nB;
 						pth->pppar->calcm = calcm;
 						if (calcm == 0)
 						{
-							packarray3(&part[tree[TA1].firstPart], nA, pa);
 							pthread_barrier_wait(pth->bar);
 							pth->counter += nA*(nB*22+2);
 							ppkernel(pa, nA, pb, nB, pth->constants, pc, pth->nSlave, pth->blockid);
@@ -441,7 +466,6 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 						}
 						else
 						{	
-							packarray3m(&part[tree[TA1].firstPart], nA, pa, mass);
 							pthread_barrier_wait(pth->bar);
 							pth->counter += nA*(nB*23+1);
 							ppmkernel(pa, nA, pb, mass, nB, pth->constants, pc, pth->nSlave, pth->blockid);
@@ -469,7 +493,18 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 			pb.y[nB] = tree[TB].massCenter[1];
 			pb.z[nB] = tree[TB].massCenter[2];
 			mass[nB] = tree[TB].mass;
+//			DBG_INFO(DBG_TMP, "[AcceptInfo]  %f  %f  %f  %f  %f  %f\n", pb.x[nB], pb.y[nB], pb.z[nB], mass[nB], tree[TB].mass, (Real)tree[TB].nPart*partmass);
+//			int xx;
+//			for (xx=0; xx<tree[TB].nPart; xx++)
+//			{
+//				pb.x[nB+xx] = tree[TB].massCenter[0];
+//				pb.y[nB+xx] = tree[TB].massCenter[1];
+//				pb.z[nB+xx] = tree[TB].massCenter[2];
+//				mass[nB+xx] = partmass;
+//			}
+//			nB += tree[TB].nPart;
 			nB = 1;
+//			DBG_INFO(DBG_TMP, "[Accum] TB_Acc  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 		}
 		else
 		{
@@ -482,6 +517,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 			{
 				packarray3(&part[tree[TB].firstPart], nB, pb);
 				nB = tree[TB].nPart;
+//				DBG_INFO(DBG_TMP, "[Accum] TB_Dec  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 			}
 #ifdef __MIC__
 			else if ((tree[TB].nChildren==0 || tree[TB].nPart<=ppsize) || 
@@ -515,6 +551,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 				TB1 = pT[level];
 				while (level>tree[TB].level && TB1<tree[TBp].firstChild+tree[TBp].nChildren)
 				{
+//					DBG_INFO(DBG_TMP, "[Search] level=%d, TB=%d,%d, TB1=%d,%d,%d, TBp=%d,%d,%d,%d.\n", level, TB, tree[TB].level, TB1, tree[TB1].level, tree[TB1].nPart, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 					if (accepted_cell_to_cell(TA, TB1, theta))
 					{
 						calcm = 1;
@@ -522,20 +559,35 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 						pb.y[nB] = tree[TB1].massCenter[1];
 						pb.z[nB] = tree[TB1].massCenter[2];
 						mass[nB] = tree[TB1].mass;
+//						DBG_INFO(DBG_TMP, "[AcceptInfo]  %f  %f  %f  %f  %f  %f\n", pb.x[nB], pb.y[nB], pb.z[nB], mass[nB], tree[TB1].mass, (Real)tree[TB1].nPart*partmass);
+//						int xx;
+//						for (xx=0; xx<tree[TB1].nPart; xx++)
+//						{
+//							pb.x[nB+xx] = tree[TB1].massCenter[0];
+//							pb.y[nB+xx] = tree[TB1].massCenter[1];
+//							pb.z[nB+xx] = tree[TB1].massCenter[2];
+//							mass[nB+xx] = partmass;
+//						}
+//						nB += tree[TB1].nPart;
 						nB += 1;
+//						DBG_INFO(DBG_TMP, "[Accum] TA/TB1_Acc  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 
 						TB1++;
 						while(level>tree[TB].level && TB1>=tree[TBp].firstChild+tree[TBp].nChildren)
 						{
 							level--;
-							TB1 = pT[level];
-							TBp = pT[level-1];
-							TB1++;
+							TB1 = pT[level]+1;
+							if(level>tree[TB].level)
+							{
+								TBp = pT[level-1];
+							}
+//							DBG_INFO(DBG_TMP, "[Search up1] level=%d, TB=%ld,%d, TB1=%ld, %d, TBp=%ld,%d,%ld,%d.\n", level, TB, tree[TB].level, TB1, tree[TB1].level, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 						}
-						if (TB1<tree[TBp].firstChild+tree[TBp].nChildren)
+						if (level>tree[TB].level && TB1<tree[TBp].firstChild+tree[TBp].nChildren)
 						{
 							pT[level] = TB1;
 						}
+//						DBG_INFO(DBG_TMP, "[Search ver1] level=%d, TB=%ld,%d, TB1=%ld, %d, TBp=%ld,%d,%ld,%d.\n", level, TB, tree[TB].level, TB1, tree[TB1].level, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 					}
 #ifdef __MIC__
 					else if (tree[TB1].nChildren == 0 || tree[TB1].nChildren <= ppsize)
@@ -543,21 +595,28 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 					else if (tree[TB1].nChildren == 0)
 #endif
 					{
+//						DBG_INFO(DBG_TMP, "[Search t21] level=%d, nB=%d, TB1=%d,%d,%d, TBp=%d,%d,%d,%d.\n", level, nB, TB1, tree[TB1].level, tree[TB1].nPart, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 						packarray3om(&part[tree[TB1].firstPart], nB, tree[TB1].nPart, pb, mass);
 						nB += tree[TB1].nPart;
+//						DBG_INFO(DBG_TMP, "[Search t22] level=%d, nB=%d, TB1=%d,%d,%d, TBp=%d,%d,%d,%d.\n", level, nB, TB1, tree[TB1].level, tree[TB1].nPart, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
+//						DBG_INFO(DBG_TMP, "[Accum] TA/TB1_Dec  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 
 						TB1++;
 						while(level>tree[TB].level && TB1>=tree[TBp].firstChild+tree[TBp].nChildren)
 						{
 							level--;
-							TB1 = pT[level];
-							TBp = pT[level-1];
-							TB1++;
+							TB1 = pT[level]+1;
+							if(level>tree[TB].level)
+							{
+								TBp = pT[level-1];
+							}
+//							DBG_INFO(DBG_TMP, "[Search up2] level=%d, TB=%ld,%d, TB1=%ld, %d, TBp=%ld,%d,%ld,%d.\n", level, TB, tree[TB].level, TB1, tree[TB1].level, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 						}
-						if (TB1<tree[TBp].firstChild+tree[TBp].nChildren)
+						if (level>tree[TB].level && TB1<tree[TBp].firstChild+tree[TBp].nChildren)
 						{
 							pT[level] = TB1;
 						}
+//						DBG_INFO(DBG_TMP, "[Search ver2] level=%d, TB=%ld,%d, TB1=%ld, %d, TBp=%ld,%d,%ld,%d.\n", level, TB, tree[TB].level, TB1, tree[TB1].level, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 					}
 					else
 					{
@@ -565,6 +624,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 						level++;
 						pT[level] = tree[TB1].firstChild;
 						TB1 = pT[level];
+//						DBG_INFO(DBG_TMP, "[Search down] level=%d, TB=%ld,%d, TB1=%ld, %d, TBp=%ld,%d,%ld,%d.\n", level, TB, tree[TB].level, TB1, tree[TB1].level, TBp, tree[TBp].level, tree[TBp].firstChild, tree[TBp].nChildren);
 					}
 				}
 			}
@@ -581,7 +641,18 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 						pb.y[nB] = tree[TB1].massCenter[1];
 						pb.z[nB] = tree[TB1].massCenter[2];
 						mass[nB] = tree[TB1].mass;
+//						DBG_INFO(DBG_TMP, "[AcceptInfo]  %f  %f  %f  %f  %f  %f\n", pb.x[nB], pb.y[nB], pb.z[nB], mass[nB], tree[TB1].mass, (Real)tree[TB1].nPart*partmass);
+//						int xx;
+//						for (xx=0; xx<tree[TB1].nPart; xx++)
+//						{
+//							pb.x[nB+xx] = tree[TB1].massCenter[0];
+//							pb.y[nB+xx] = tree[TB1].massCenter[1];
+//							pb.z[nB+xx] = tree[TB1].massCenter[2];
+//							mass[nB+xx] = partmass;
+//						}
+//						nB += tree[TB1].nPart;
 						nB += 1;
+//						DBG_INFO(DBG_TMP, "[Accum] TB1/TB1_Acc  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 					}
 					else
 					{
@@ -595,6 +666,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 						{
 							packarray3om(&part[tree[TB1].firstPart], nB, tree[TB1].nPart, pb, mass);
 							nB += tree[TB1].nPart;
+//							DBG_INFO(DBG_TMP, "[Accum] TB1/TB1_Dec  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 						}
 						else
 						{
@@ -611,13 +683,13 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 		}
 		if (nB>0)
 		{
+			packarray3(&part[tree[TA].firstPart], nA, pa);
 			packarray3(NULL, nA, pc);
 			pth->pppar->nA = nA;
 			pth->pppar->nB = nB;
 			pth->pppar->calcm = calcm;
 			if (calcm == 0)
 			{
-				packarray3(&part[tree[TA].firstPart], nA, pa);
 				pthread_barrier_wait(pth->bar);
 				pth->counter += nA*(nB*22+2);
 				ppkernel(pa, nA, pb, nB, pth->constants, pc, pth->nSlave, pth->blockid);
@@ -626,7 +698,6 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 			}
 			else
 			{	
-				packarray3m(&part[tree[TA].firstPart], nA, pa, mass);
 				pthread_barrier_wait(pth->bar);
 				pth->counter += nA*(nB*23+1);
 				ppmkernel(pa, nA, pb, mass, nB, pth->constants, pc, pth->nSlave, pth->blockid);
@@ -760,66 +831,33 @@ void tree_traversal(Domain *dp, Constants *constants)
 
 	DBG_INFO(DBG_TIME, "[%d] Treewalking time = %f, cnt = %ld.\n", dp->rank, dtime()-tstamp, counter);
 #endif
-//	for (i=0; i<Ngrid; i++)
-//	{
-//		if (dp->tag[i] == TAG_FRONTIERS)
-//		{
-//			int pidx = tree[dp->mroot[i]].firstPart;
-//			printf("[%d] idx=%d, acc.x=%f, acc.y=%f, acc.z=%f.\n", dp->rank, i, part[pidx].acc[0], part[pidx].acc[1], part[pidx].acc[2]); 
-//			break;
-//		}
-//	}
-//	for (i=0; i<Ngrid; i++)
-//	{
-//		if (dp->tag[i] == TAG_OUTERCORE)
-//		{
-//			int pidx = tree[dp->mroot[i]].firstPart;
-//			printf("[%d] idx=%d, acc.x=%f, acc.y=%f, acc.z=%f.\n", dp->rank, i, part[pidx].acc[0], part[pidx].acc[1], part[pidx].acc[2]); 
-//			break;
-//		}
-//	}
-//	for (i=Ngrid-1; i>=0; i--)
-//	{
-//		if (dp->tag[i] == TAG_FRONTIERS)
-//		{
-//			int pidx = tree[dp->mroot[i]].firstPart;
-//			printf("[%d] idx=%d, acc.x=%f, acc.y=%f, acc.z=%f.\n", dp->rank, i, part[pidx].acc[0], part[pidx].acc[1], part[pidx].acc[2]); 
-//			break;
-//		}
-//	}
-//	for (i=Ngrid-1; i>=0; i--)
-//	{
-//		if (dp->tag[i] == TAG_OUTERCORE)
-//		{
-//			int pidx = tree[dp->mroot[i]].firstPart;
-//			printf("[%d] idx=%d, acc.x=%f, acc.y=%f, acc.z=%f.\n", dp->rank, i, part[pidx].acc[0], part[pidx].acc[1], part[pidx].acc[2]); 
-//			break;
-//		}
-//	}
-//	if (dp->rank==12)
-//	{
-//		FILE *fp;
-//		fp = fopen("res12", "w+");
-//
-//		for (i=0; i<Ngrid; i++)
-//		{
-//			if (dp->tag[i] == TAG_FRONTIERS || dp->tag[i] == TAG_OUTERCORE)
-//			{
-//				int pidx = tree[dp->mroot[i]].firstPart;
-//				int pnum = dp->count[i];
-//				for (j=0; j<pnum; j++)
-//				{
-//					fprintf(fp, "[%d] idx=%d, px=%f, py=%f, pz=%f, ax=%f, ay=%f, az=%f.\n", dp->rank, i, part[pidx+j].pos[0], part[pidx+j].pos[1], part[pidx+j].pos[2], part[pidx+j].acc[0], part[pidx+j].acc[1], part[pidx+j].acc[2]); 
-//				}
-//			}
-//		}
-//		fclose(fp);
-//	}
+
 	for (i=0; i<npart; i++)
 	{
+#ifdef NMK_NAIVE_GRAVITY
 		fpart[i].acc[0] += part[i].acc[0];
 		fpart[i].acc[1] += part[i].acc[1];
 		fpart[i].acc[2] += part[i].acc[2];
+#else
+		fpart[i].acc[0] += constants->GRAV_CONST*part[i].acc[0];
+		fpart[i].acc[1] += constants->GRAV_CONST*part[i].acc[1];
+		fpart[i].acc[2] += constants->GRAV_CONST*part[i].acc[2];
+#endif
 	}
+
 	free(part);
+
+#ifdef NMK_VERIFY
+	char file[256];
+	sprintf(file, "pt.acc.%d", dp->rank);
+	FILE *fp = fopen(file, "w+");
+	for (i=0; i<npart; i++)
+	{
+		fprintf(fp, "%d  %f  %f  %f\n", fpart[i].id, fpart[i].acc[0], fpart[i].acc[1], fpart[i].acc[2]);
+//			fprintf(fp, "%d  %f  %f  %f\n", fpart[i].id, part[i].acc[0]*constants->GRAV_CONST, part[i].acc[1]*constants->GRAV_CONST, part[i].acc[2]*constants->GRAV_CONST);
+	}
+	fclose(fp);
+	MPI_Barrier(MPI_COMM_WORLD);
+	exit(0);
+#endif
 }

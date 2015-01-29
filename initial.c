@@ -116,19 +116,46 @@ void init_random_particles(Constants *constants, System *sys, Long n_start, Long
 {
 	Int n;
 	int m;
+
+#ifdef NMK_VERIFY
+    srand48(0);
+	double b=0;
+	for (n=0; n<n_count*3*myid; n++)
+	{
+		b+=drand48();		
+	}
+	printf("%f\n", b);
+#else
     srand48(8888*myid);
+#endif
 	double velocity = constants->BOX_SIZE/20.0;
     for (n=0; n<n_count; n++)
     {
 		for (m=0; m<DIM; m++)
 		{
-			sys->part[n].pos[m] = (Real) drand48()*constants->BOX_SIZE;
+#ifdef NMK_VERIFY
+			sys->part[n].pos[m] = (Real) drand48()*24998.0+87501.0;
+			sys->part[n].vel[m] = (Real) 0.0;
+#else
+//			sys->part[n].pos[m] = (Real) drand48()*constants->BOX_SIZE;
 			sys->part[n].vel[m] = (Real) drand48()*velocity;
+#endif
 			sys->part[n].acc[m]	= (Real) 0.0;
 		}
-		sys->part[n].id = n_start + n_count + 1;
+		sys->part[n].id = n_start + n + 1;
 		sys->part[n].mass = (Real) constants->PART_MASS;
     }
+#if ((defined NMK_VERIFY) && (defined NMK_GEN_VER_FILE))
+	if (myid == 0)
+	{
+		FILE *fp = fopen("pt.ori", "w+");
+		for (n=0; n<n_count; n++)
+		{
+			fprintf(fp, "%d  %f  %f  %f\n", sys->part[n].id, sys->part[n].pos[0], sys->part[n].pos[1], sys->part[n].pos[2]);
+		}
+		fclose(fp);
+	}
+#endif
 }
 
 void initialize_system(char fnamepara[], Constants *constparam_ptr, Status* status_ptr, System * sys_ptr)
@@ -201,7 +228,7 @@ void initialize_system(char fnamepara[], Constants *constparam_ptr, Status* stat
     constparam_ptr->SPLIT_SCALE  = 1.25*width_grid;
     constparam_ptr->CUTOFF_SCALE = 6.0*width_grid;
     constparam_ptr->GRAV_CONST = 43007.1;
-	constparam_ptr->EPS2 = 0.000026;
+	constparam_ptr->EPS2 = 0.00026;
 	
 
 //    Long start_read = (Long)(((float)( rank_proc )/(num_proc))*(constparam_ptr->TOTAL_NUM_PART));

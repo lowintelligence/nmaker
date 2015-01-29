@@ -1,5 +1,5 @@
 ---------------------------------
-Updated on January 23, 2015.
+Updated on January 30, 2015.
 ---------------------------------
 I. Offload:
 	[Done] 1. Host load balancing. ***
@@ -13,11 +13,12 @@ II. Performance:
 	[Done] 3. Try better walking tree and processing cell model. *
 	[Stalled] 4. Thread load balancing, with work stealing? 
 	[Done] 5. Why task parallization not scale well? Try data parallel? **
-	6. Fast computation for PP kernel with the fixing coefficient.
+	[Done/low perf]6. Fast computation for PP kernel with the fixing coefficient, erfc() is the bottleneck. ***
 
 III. Runtime:
 	[Ignore] 1. Thread task model optimization, TEAM+MASTER+SLAVE is OK? **
 	2. Thread running model optimization, using thread pool?
+	3. PM calcultion overlapped in Tree+PP.
 
 IV. Correctness:
 	[Done] 1. PM calculation failed when bigger than 16 procs. **
@@ -26,10 +27,10 @@ IV. Correctness:
 	[Done] 4. Integrate the time stepping procedure.
 	5. Test a real case and check the correctness. ***
 	[Half Done] 6. Correct the potetial >2G integer bugs to guarantee the running for more than 2048^3 particles. ***
-	7. Check the Tree+PP calculation with the result of pure PP. ***
+	[Done] 7. Check the Tree+PP calculation with the result of pure PP. ***
 
 V. Code style:
 	[Done] 1. Rewrite and check the code with new data definition. ***
-	2. Eliminate unnessesary duplicated varibles and the arrays no need to keep-in-house. **
+	[Almost done]2. Eliminate unnessesary duplicated varibles and the arrays no need to keep-in-house. **
 	3. Build the code with delivering tools like automake. *
 

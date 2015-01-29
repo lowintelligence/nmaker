@@ -26,8 +26,8 @@
 
 typedef struct
 {
-	int TA;
-	int TB;
+	Int TA;
+	Int TB;
 	double theta;
 } TWelement;
 

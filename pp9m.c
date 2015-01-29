@@ -31,32 +31,55 @@ void initialize_particle(int nPart, double box)
     part.acc.y = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
     part.acc.z = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
     part.mass  = (Real*)memalign(ALIGNCNT, sizeof(Real)*nPart);
-
+	
+#ifdef NMK_VERIFY
+	srand48(0);
+#endif
     for (n=0; n<nPart; n++) {
-         part.pos.x[n] = box*ran3(&seed);
+#ifdef NMK_VERIFY
+         part.pos.x[n] = drand48()*24998.0+87501.0;
+         part.pos.y[n] = drand48()*24998.0+87501.0;
+         part.pos.z[n] = drand48()*24998.0+87501.0;
+#else
+	     part.pos.x[n] = box*ran3(&seed);
          part.pos.y[n] = box*ran3(&seed);
          part.pos.z[n] = box*ran3(&seed);
-//         part.pos.x[n] = (Real) 0.0;
-//         part.pos.y[n] = (Real) 0.0;
-//         part.pos.z[n] = (Real) n;
+#endif
          part.acc.x[n] = (Real) 0.0;
          part.acc.y[n] = (Real) 0.0;
          part.acc.z[n] = (Real) 0.0;
     }
     for (n=0; n<nPart; n++) {
-         part.mass[n] = 0.25;
+#ifdef NMK_VERIFY
+		 part.mass[n] = (3.0*(0.25)*0.01)/1080886.296;
+	     part.mass[n] *= pow(200000.0,3.0)/(nPart);
+#else
+         part.mass[n] = box * 0.25;
+#endif
 	}
+#if (defined NMK_VERIFY) && (defined NMK_GEN_VER_FILE)
+	FILE *fp = fopen("pp.ori", "w+");
+	for (n=0; n<nPart; n++)
+	{
+		fprintf(fp, "%d  %f  %f  %f\n", n+1, part.pos.x[n], part.pos.y[n], part.pos.z[n]);
+	}
+	fclose(fp);
+#endif
 }
 
 
 int main(int argc, char *argv[])
 {
-    int n, nPart, lb, la;
+    int n, m, nPart, lb, la;
     double tstart, tstop, ttime;
     double gflops = 0.0;
     float a = 1.1;
+#ifdef NMK_VERIFY	
+	FILE *fp;
+#endif
 //	Real eps = 1.0/100.0/40.0;
 	Real eps = 0.00026;
+	Real dx, dy, dz, dr2, dr3;
 #ifdef __PAPI
 	int EventSet = PAPI_NULL;
 	long long value;
@@ -76,44 +99,61 @@ int main(int argc, char *argv[])
 	{
 		la=atoi(argv[3]);
 	}
-    /*
+    
     printf("Initializing\r\n");
+#ifdef NMK_VERIFY
+    initialize_particle(nPart, 200000.0);
+#else
     initialize_particle(nPart, 1.0);
+#endif
 
+#if (defined NMK_VERIFY) && (defined NMK_GEN_VER_FILE)
     printf("Starting Compute\n");
     
     tstart = dtime();
     
-    for ( n=0; n<nPart-1; n++ ) {
-        for ( m=n+1; m<nPart; m++) {
-            dx = part[m].pos[0] -  part[n].pos[0];
-            dy = part[m].pos[1] -  part[n].pos[1];
-            dz = part[m].pos[2] -  part[n].pos[2];
+#pragma omp parallel for schedule(static) private(dx, dy, dz, dr2, dr3)
+    for ( n=0; n<nPart; n++ ) {
+		Real accx = 0.0;
+		Real accy = 0.0;
+		Real accz = 0.0;
+        for ( m=0; m<nPart; m++) {
+            dx = part.pos.x[m] -  part.pos.x[n];
+            dy = part.pos.y[m] -  part.pos.y[n];
+            dz = part.pos.z[m] -  part.pos.z[n];
             
-            dr2 = dx*dx + dy*dy + dz*dz;
-            dr3 = sqrt(dr2)*dr2;
+            dr2 = eps + dx*dx + dy*dy + dz*dz;
+            dr3 = (Real) 1.0 / sqrt(dr2*dr2*dr2);
             
-            part[n].acc[0] += dx/dr3;
-            part[n].acc[1] += dy/dr3;
-            part[n].acc[2] += dz/dr3;
-            
-            part[m].acc[0] -= dx/dr3;
-            part[m].acc[1] -= dy/dr3;
-            part[m].acc[2] -= dz/dr3;
+            accx += part.mass[m]*dx*dr3;
+            accy += part.mass[m]*dy*dr3;
+            accz += part.mass[m]*dz*dr3;
         }
+		part.acc.x[n] = accx;
+		part.acc.y[n] = accy;
+		part.acc.z[n] = accz;
     }
 
     tstop = dtime();
     
-    free(part);
-    
     ttime = tstop - tstart;
     printf("dtime = %lf \n", ttime);
-    */
-    initialize_particle(nPart, 1.0);
+    
+	fp = fopen("ppn.acc", "w+");
+	for (n=0; n<nPart; n++)
+	{
+		fprintf(fp, "%d  %f  %f  %f\n", n+1, part.acc.x[n], part.acc.y[n], part.acc.z[n]);
+		part.acc.x[n] = 0;
+		part.acc.y[n] = 0;
+		part.acc.z[n] = 0;
+	}
+	fclose(fp);
+#endif
+
  //   omp_set_num_threads(32);
   //  kmp_set_defaults("KMP_AFFINITY=compact");
 //    kmp_set_defaults("KMP_AFFINITY=scatter");
+
 #ifdef __INTEL_OFFLOAD
 	int nCPU;
 	int nMIC0;
@@ -275,6 +315,15 @@ int main(int argc, char *argv[])
         
     }
    */
+#ifdef NMK_VERIFY
+	fp = fopen("pp.acc", "w+");
+	double G=43007.1;
+	for (n=0; n<nPart; n++)
+	{
+		fprintf(fp, "%d  %f  %f  %f\n", n+1, part.acc.x[n]*G, part.acc.y[n]*G, part.acc.z[n]*G);
+	}
+	fclose(fp);
+#endif
     return 0;
 }
 

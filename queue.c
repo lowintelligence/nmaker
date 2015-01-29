@@ -72,7 +72,7 @@ int enqueue_tw(TWQ *pq, Int ta, Int tb)
 	pe[pq->tail].TA = ta;
 	pe[pq->tail].TB = tb;
 	pq->tail = (pq->tail+1)%pq->size;
-//	if(pq->length==0) printf("Enqueue TA=%d, nPa=%d, TB=%d, nPb=%d.\n", ta, tree[ta].nPart, tb, tree[tb].nPart);
+//	printf("Enqueue TA=%d, nPa=%d, TB=%d, nPb=%d.\n", ta, tree[ta].nPart, tb, tree[tb].nPart);
 	pq->length++;
 	return 0;
 }

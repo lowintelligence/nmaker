@@ -1,4 +1,13 @@
 ***********************************************
+Changes from last update to Januray 30, 2015:
+-----------------------------------------------
+	1. Correcting the two mistakes in PP calculation.
+	2. Correcting a cell search algorithm in DTT traversal.
+	3. Fixing the issues of mesh masking and adjoining particle processing.
+	4. Adding the verifying scheme and ppverify program, using NMK_PP_VERIFY and NMK_GEN_VER_FILE macros to enable it.
+***********************************************
+
+***********************************************
 Changes from last update to Januray 23, 2015:
 -----------------------------------------------
 	1. Redesign of the basic data structure, for particles, domains.

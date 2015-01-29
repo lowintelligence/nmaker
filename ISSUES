@@ -1,4 +1,29 @@
-******************2015/01/21 22:00********************
+********************** Unsolved issues **********************
+1. The setting of 'eps2' was a constant as 0.00026, not strict.
+2. When tree node reaches the MAX_TREE_LEVEL but the particles exceeding MAX_PACKAGE_SIZE, may be not stable.
+
+******************** Code fixing history ********************
+------------------2015/01/30 0:00--------------------
+inital.c
+traversal.c
+pp9m.c
+ppverify.c
+nbody.ver
+	Adding the verifying function in the code. To enable it, set PP_VERIFY macro enabled. To Generate correct PP result file, set PP_GEN_VER_FILE enabled.
+	The verifying system should be a box with 200000, particles distributed uniformly in [87501-112499].
+	Usage of ppverify.c : ./ppverify [nPart/1048576 [file to be check/pp.acc [file as standard/ppn.acc [index file/pp.ori [gravity const/1.0]]]]]
+
+ppkernel.c
+traversal.c
+	Fixed the two issues for mass pp calculation.
+	Fixed the error of setting wrong start and ending block for each thread.
+	Fixed the search algorithm while TA is leaf buf TB is not.
+
+domain.c
+	Fixed the mesh masking issue (upper lwer) for the case with large empty space.
+	Modifid some judge condition to correct the adjoining particle processing error for 'dcount' calculation and unneccesary received partiles.
+
+------------------2015/01/21 22:00--------------------
 proto.h
 global.h
 inital.c
@@ -13,7 +38,7 @@ main.c
 partmesh.c
 	Setting FFTW2_LIB as default, since MKL doesn't support FFTW3 MPI interface.
 
-******************2015/01/13 13:00********************
+------------------2015/01/13 13:00--------------------
 traversal.c
 	Modified some judge critierian in DTT tree walking on MIC to raise the performance.
 
@@ -24,11 +49,11 @@ global.c
 	Add the INPUT VARIBLES and functions for CPU-MIC load balancing.
 		DYNAMIC_LOAD/DYNLOAD: if non zero, enable the load balancing.
 
-******************2015/01/13 1:00********************
+------------------2015/01/13 1:00--------------------
 traversal.c
 	Modified DTT process logic, if A and B are equal in size, seperate A first (B in old versions). If A is leaf, using a DST for B tree entirely, avoid more queue operations. If B's childrens are leaf nodes, also add it to A's pp, instead of enqueue operations.
 
-******************2015/01/12 14:00********************
+------------------2015/01/12 14:00--------------------
 global.h
 initial.h
 initial.c
@@ -84,7 +109,7 @@ ppkernel.c
 Makefile
 	Moved from old version, with minor modification.
 	
-******************2015/01/05 22:00********************
+------------------2015/01/05 22:00--------------------
 initial.c
 	Correct the char array length of 'name' and 'value'.
 
@@ -92,7 +117,7 @@ stepping.c
 	Included 'math.h'.
 	Strictly modified draft() function to adjust border particles correction about its precision.
 
-******************2015/01/05 12:00********************
+------------------2015/01/05 12:00--------------------
 nmk_utils.h:
 	New file for utility functions. Now including dbginfo macros and dtime() function.
 
@@ -124,7 +149,7 @@ domain.c:
 	Combine the particle data with adjointed particles.
 	Strictly modified the adjointed particle processing functions in broadcast_frontiers.
 
-******************2015/01/01 00:00********************
+------------------2015/01/01 00:00--------------------
 proto.h
 global.h
 global.c
@@ -141,4 +166,4 @@ iosnap.c
 stepping.h
 stepping.c
 	Based on the new PM code with new structure.
-******************************************************
+------------------------------------------------------

@@ -234,9 +234,16 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 		{
 //			int nbs = tid*(nb/tnum)+((nb%tnum)+tid)/tnum*((nb+tid)%tnum);
 //			int nbt = nbs + (nb+tid)/tnum;
-			int nbs = tid*(nb/tnum)+(tnum+(nb%tnum)-tid)/tnum*(tid%tnum);
-			int nbt = nbs + (nb+tnum-1-tid)/tnum;
+//			int nbs = tid*(nb/tnum)+(nb%tnum-(tnum+(nb%tnum)-tid)/tnum*(nb%tnum-tid));
+//			int nbt = nbs + (nb+tnum-1-tid)/tnum;
+			int pernb = nb/tnum;
+			int modnb = nb%tnum;
+			int tpass = modnb-tid;
+			int tex = (tnum+tpass-1)/tnum;
+			int nbs = tid*pernb+(modnb-tex*tpass);
+			int nbt = nbs + pernb + tex;
 //			printf ("Thread[%d]: nbs = %d, nbt = %d.\n", tid, nbs, nbt);
+
 			for ( n=nbs; n<nbt; n++ ) {
 
 				nt = (n==nb-1) ? la : (n+1)*CLCNT;
@@ -287,7 +294,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
-								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 								dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
 								dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
@@ -386,22 +393,22 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
-								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 								dr21 = eps2+dd1;
 #if (UNROLL > 1)
 								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 								dr2 = SQRT(dd2);
-								dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
 								dr22 = eps2+dd2;
 #if (UNROLL >=4)
 								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 								dr3 = SQRT(dd3);
-								dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
 								dr23 = eps2+dd3;
 
 								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 								dr4 = SQRT(dd4);
-								dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+								dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 								dr24 = eps2+dd4;
 #endif
 #endif
@@ -459,8 +466,15 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 		{
 //			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
 //			int nt = ns + (la+tid)/tnum;
-			int ns = tid*(la/tnum)+(tnum+(la%tnum)-tid)/tnum*(tid%tnum);
-			int nt = ns + (la+tnum-1-tid)/tnum;
+//			int ns = tid*(la/tnum)+(la%tnum-(tnum+(la%tnum)-tid)/tnum*(la%tnum-tid));
+//			int nt = ns + (la+tnum-1-tid)/tnum;
+			int pern = la/tnum;
+			int modn = la%tnum;
+			int tpass = modn-tid;
+			int tex = (tnum+tpass-1)/tnum;
+			int ns = tid*pern+(modn-tex*tpass);
+			int nt = ns + pern + tex;
+//			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
 
 			for (m=0; m<mb; m++)
 			{
@@ -505,7 +519,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
-							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 							dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
 							dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
@@ -586,22 +600,22 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
-							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 							dr21 = eps2+dd1;
 #if (UNROLL > 1)
 							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 							dr2 = SQRT(dd2);
-							dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
 							dr22 = eps2+dd2;
 #if (UNROLL >=4)
 							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 							dr3 = SQRT(dd3);
-							dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
 							dr23 = eps2+dd3;
 
 							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 							dr4 = SQRT(dd4);
-							dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+							dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 							dr24 = eps2+dd4;
 #endif
 #endif
@@ -658,9 +672,16 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 		{
 //			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
 //			int nt = ns + (la+tid)/tnum;
-			int ns = tid*(la/tnum)+(tnum+(la%tnum)-tid)/tnum*(tid%tnum);
-			int nt = ns + (la+tnum-1-tid)/tnum;
+//			int ns = tid*(la/tnum)+(la%tnum-(tnum+(la%tnum)-tid)/tnum*(la%tnum-tid));
+//			int nt = ns + (la+tnum-1-tid)/tnum;
+			int pern = la/tnum;
+			int modn = la%tnum;
+			int tpass = modn-tid;
+			int tex = (tnum+tpass-1)/tnum;
+			int ns = tid*pern+(modn-tex*tpass);
+			int nt = ns + pern + tex;
 //			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
+
 			for (m=0; m<lb; m++)
 			{
 				x2 = B.x[m];
@@ -684,7 +705,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 					dr1 = SQRT(dd1);
-					dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 					dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
 					dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
@@ -772,7 +793,8 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		tid = get_block_tid(0);
 		tnum = get_block_tnum(0);
 #endif
-	
+
+#if 1
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
 
@@ -780,14 +802,22 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		{
 //			int nbs = tid*(nb/tnum)+((nb%tnum)+tid)/tnum*((nb+tid)%tnum);
 //			int nbt = nbs + (nb+tid)/tnum;
-			int nbs = tid*(nb/tnum)+(tnum+(nb%tnum)-tid)/tnum*(tid%tnum);
-			int nbt = nbs + (nb+tnum-1-tid)/tnum;
+//			int nbs = tid*(nb/tnum)+(nb%tnum-(tnum+(nb%tnum)-tid)/tnum*(nb%tnum-tid));
+//			int nbt = nbs + (nb+tnum-1-tid)/tnum;
+			int pernb = nb/tnum;
+			int modnb = nb%tnum;
+			int tpass = modnb-tid;
+			int tex = (tnum+tpass-1)/tnum;
+			int nbs = tid*pernb+(modnb-tex*tpass);
+			int nbt = nbs + pernb + tex;
 //			printf ("Thread[%d]: nbs = %d, nbt = %d.\n", tid, nbs, nbt);
-			for ( n=nbs; n<nbt; n++ ) {
 
+			for ( n=nbs; n<nbt; n++ )
+			{
 				nt = (n==nb-1) ? la : (n+1)*CLCNT;
 
-				for (m=0; m<mb; m++) {
+				for (m=0; m<mb; m++)
+				{
 #ifdef __MULTI_THREAD_
 					mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #else
@@ -796,7 +826,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 
 					if ( mt == lb ) // No unrolling at the last B block
 					{
-//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, ((m+tid)%mb)*N_CACHE, mt);
+//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, (mb-1)*N_CACHE, mt);
 //#pragma prefetch A.x:1:CLCNT
 //#pragma prefetch A.y:1:CLCNT
 //#pragma prefetch A.z:1:CLCNT
@@ -833,7 +863,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
-								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 								dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
 								dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
@@ -855,6 +885,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 					}
 					else // Unrolling the loop
 					{
+//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, m*N_CACHE, mt);
 //#pragma prefetch A.x:1:CLCNT
 //#pragma prefetch A.y:1:CLCNT
 //#pragma prefetch A.z:1:CLCNT
@@ -932,22 +963,22 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
-								dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 								dr21 = eps2+dd1;
 #if (UNROLL > 1)
 								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 								dr2 = SQRT(dd2);
-								dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
 								dr22 = eps2+dd2;
 #if (UNROLL >=4)
 								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 								dr3 = SQRT(dd3);
-								dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
 								dr23 = eps2+dd3;
 
 								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 								dr4 = SQRT(dd4);
-								dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+								dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 								dr24 = eps2+dd4;
 #endif
 #endif
@@ -1005,8 +1036,15 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		{
 //			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
 //			int nt = ns + (la+tid)/tnum;
-			int ns = tid*(la/tnum)+(tnum+(la%tnum)-tid)/tnum*(tid%tnum);
-			int nt = ns + (la+tnum-1-tid)/tnum;
+//			int ns = tid*(la/tnum)+(la%tnum-(tnum+(la%tnum)-tid)/tnum*(la%tnum-tid));
+//			int nt = ns + (la+tnum-1-tid)/tnum;
+			int pern = la/tnum;
+			int modn = la%tnum;
+			int tpass = modn-tid;
+			int tex = (tnum+tpass-1)/tnum;
+			int ns = tid*pern+(modn-tex*tpass);
+			int nt = ns + pern + tex;
+//			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
 
 			for (m=0; m<mb; m++)
 			{
@@ -1051,7 +1089,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
-							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 							dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
 							dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
@@ -1132,22 +1170,22 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
-							dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 							dr21 = eps2+dd1;
 #if (UNROLL > 1)
 							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 							dr2 = SQRT(dd2);
-							dg2 = G * (ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2));
+							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
 							dr22 = eps2+dd2;
 #if (UNROLL >=4)
 							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 							dr3 = SQRT(dd3);
-							dg3 = G * (ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2));
+							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
 							dr23 = eps2+dd3;
 
 							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 							dr4 = SQRT(dd4);
-							dg4 = G * (ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2));
+							dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 							dr24 = eps2+dd4;
 #endif
 #endif
@@ -1204,8 +1242,14 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		{
 //			int ns = tid*(la/tnum)+((la%tnum)+tid)/tnum*((la+tid)%tnum);
 //			int nt = ns + (la+tid)/tnum;
-			int ns = tid*(la/tnum)+(tnum+(la%tnum)-tid)/tnum*(tid%tnum);
-			int nt = ns + (la+tnum-1-tid)/tnum;
+//			int ns = tid*(la/tnum)+(la%tnum-(tnum+(la%tnum)-tid)/tnum*(la%tnum-tid));
+//			int nt = ns + (la+tnum-1-tid)/tnum;
+			int pern = la/tnum;
+			int modn = la%tnum;
+			int tpass = modn-tid;
+			int tex = (tnum+tpass-1)/tnum;
+			int ns = tid*pern+(modn-tex*tpass);
+			int nt = ns + pern + tex;
 //			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
 			for (m=0; m<lb; m++)
 			{
@@ -1222,20 +1266,20 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #ifdef NMK_NAIVE_GRAVITY
 					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
 #ifdef NMK_SINGLE_PREC
-					dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
+					dr31 = Bm[m] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
 #else
-					dr31 = Bm[k] * INVSQRT(dr21 * dr21 * dr21);
+					dr31 = Bm[m] * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
 #else // NMK_NAIVE_GRAVITY
 					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 					dr1 = SQRT(dd1);
-					dg1 = G * (ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2));
+					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 					dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
-					dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+					dr31 = Bm[m] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
-					dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+					dr31 = Bm[m] * dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
 #endif // NMK_NAIVE_GRAVITY
@@ -1246,6 +1290,58 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 				}
 			}
 		}
+#else
+		int pern = la/tnum;
+		int modn = la%tnum;
+		int tpass = modn-tid;
+		int tex = (tnum+tpass-1)/tnum;
+		int ns = tid*pern+(modn-tex*tpass);
+		nt = ns + pern + tex;
+		for (j=ns; j<nt; j++)
+		{
+			x2=A.x[j];
+			y2=A.y[j];
+			z2=A.z[j];
+
+			ax2=0;
+			ay2=0;
+			az2=0;
+
+			for (k=0; k<lb; k++)
+			{
+				dx1 = B.x[k] - x2;
+				dy1 = B.y[k] - y2;
+				dz1 = B.z[k] - z2;
+
+#ifdef NMK_NAIVE_GRAVITY
+				dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
+#ifdef NMK_SINGLE_PREC
+				dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
+#else
+				dr31 = Bm[k] * (INVSQRT(dr21 * dr21 * dr21));
+#endif
+
+#else // NMK_NAIVE_GRAVITY
+					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+					dr1 = SQRT(dd1);
+					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+					dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+					dr31 = Bm[m] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+					dr31 = Bm[m] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+
+#endif // NMK_NAIVE_GRAVITY
+
+				ax2 += dx1*dr31 ;
+				ay2 += dy1*dr31 ;
+				az2 += dz1*dr31 ;
+			}
+			C.x[j] += ax2;
+			C.y[j] += ay2;
+			C.z[j] += az2;
+		}
+#endif
 	}
 
 #ifdef __MULTI_THREAD_
