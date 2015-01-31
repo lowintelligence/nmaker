@@ -175,8 +175,8 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 	Real invpirs = (Real) RSQRTPI * invrs;
 	Real inv2rs = (Real) 0.5 * invrs;
 	Real rc = constants->CUTOFF_SCALE;
-	Real G = constants->GRAV_CONST;
 #endif
+
     /* Origin version of ppkernel 
     printf("Starting Compute\n");
     
@@ -226,7 +226,8 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #endif
 //		printf ("%ld, %d, %ld, %d, %ld, %d, %d.\n", A.x, la, B.x, lb, C.x, tnum, tid);
 //		return (0);
-	
+
+#if 1 // Set 0 to Debug	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
 
@@ -721,6 +722,60 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 				}
 			}
 		}
+
+#else // #if 1 Debug
+		// Original ppkernel without mass.
+		int pern = la/tnum;
+		int modn = la%tnum;
+		int tpass = modn-tid;
+		int tex = (tnum+tpass-1)/tnum;
+		int ns = tid*pern+(modn-tex*tpass);
+		nt = ns + pern + tex;
+		for (j=ns; j<nt; j++)
+		{
+			x2=A.x[j];
+			y2=A.y[j];
+			z2=A.z[j];
+
+			ax2=0;
+			ay2=0;
+			az2=0;
+
+			for (k=0; k<lb; k++)
+			{
+				dx1 = B.x[k] - x2;
+				dy1 = B.y[k] - y2;
+				dz1 = B.z[k] - z2;
+
+#ifdef NMK_NAIVE_GRAVITY
+				dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
+#ifdef NMK_SINGLE_PREC
+				dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+				dr31 = INVSQRT(dr21 * dr21 * dr21);
+#endif
+
+#else // NMK_NAIVE_GRAVITY
+					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+					dr1 = SQRT(dd1);
+					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+					dr21 = eps2+dd1;
+#ifdef NMK_SINGLE_PREC
+					dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+#else
+					dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+#endif
+#endif // NMK_NAIVE_GRAVITY
+
+				ax2 += dx1*dr31 ;
+				ay2 += dy1*dr31 ;
+				az2 += dz1*dr31 ;
+			}
+			C.x[j] += ax2;
+			C.y[j] += ay2;
+			C.z[j] += az2;
+		}
+#endif // #if 1
 	}
 #ifdef __MULTI_THREAD_
     tstop = dtime();
@@ -745,9 +800,9 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 	Real invpirs = (Real) RSQRTPI * invrs;
 	Real inv2rs = (Real) 0.5 * invrs;
 	Real rc = constants->CUTOFF_SCALE;
-	Real G = constants->GRAV_CONST;
 #endif
-    /* Original ppkernel with mass.
+
+    /* Origin version of ppkernel with mass
     printf("Starting Compute\n");
     
     tstart = dtime();
@@ -759,7 +814,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
             dz1 = B.z[m] -  A.z[n];
             
             dr21 = eps2 + dx*dx + dy*dy + dz*dz;
-            dr31 = Bm[m]*SQRT(dr2)*dr2;
+            dr31 = Bm[m] * SQRT(dr2)*dr2;
             
             C.x[n] += dx1/dr31;
             C.y[n] += dy1/dr31;
@@ -1291,6 +1346,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 			}
 		}
 #else
+		// Original ppkernel with mass.
 		int pern = la/tnum;
 		int modn = la%tnum;
 		int tpass = modn-tid;
@@ -1330,7 +1386,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 					dr31 = Bm[m] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
 					dr31 = Bm[m] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-
+#endif
 #endif // NMK_NAIVE_GRAVITY
 
 				ax2 += dx1*dr31 ;
