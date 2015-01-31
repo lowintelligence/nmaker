@@ -12,6 +12,24 @@
 #endif /* FFTW3_LIB */
 
 
+void* partmesh_acc(void *param)
+{
+    printf("  partmesh start\n\n");
+    /*
+            pthread_t pm_thread;
+            pthread_create(&pm_thread, NULL, convolution_gravity, param);
+            pthread_join(pm_thread, 0);
+
+            pthread_create(&pm_thread, NULL, pm_acceleration, param);
+            pthread_join(pm_thread, 0);
+    */
+    convolution_gravity(param);
+    pm_acceleration(param);
+
+
+    printf("  partmesh end\n\n");
+}
+
 /*  create struct Partmesh compatiable with pthread calling,
     containing a mesh to determine the asignment of particles  */
 Partmesh *create_partmesh(Constants *constants, Status *status, System *system)
@@ -123,6 +141,146 @@ typedef struct {
 
 static int snap_index = 0;
 static int snap_count = 0;
+
+void* assign_particles(void *param)
+{
+    Partmesh *pm = (Partmesh*)param;
+
+    int rank, Nproc;
+    int pm_nside = pm->pm_nside;
+    int pm_nside_pad  = (pm_nside/2 + 1 )*2;
+    int size_data;
+    int local_nx, local_x_start, local_ny_after_transpose,
+        local_y_start_after_transpose, total_local_size;
+    long local_n0, local_n0_start, local_n1, local_n1_start;
+    int *pm_local_start, *pm_local_xside;
+    double *bin = pm->mesh_bin;
+
+    double boxsize = (double)(pm->boxsize);
+    double split   = (double)(pm->r_split);
+    double mass  = (double)(pm->mass);
+    double delta = boxsize/pm_nside;
+    double invdelta = 1.0/delta;
+    double gravconst = pm->grav_const;
+    Body *part = pm->part;
+    const Int npart = pm->npart;
+
+    double pos_min[3];
+    double pos_max[3];
+    int mesh_min[3];
+    int mesh_max[3];
+    int mesh_nside[3];
+
+    int s, d, i;
+    Int n;
+
+    mesh_min[0] = pm->mesh_min[0];
+    mesh_min[1] = pm->mesh_min[1];
+    mesh_min[2] = pm->mesh_min[2];
+
+    mesh_max[0] = pm->mesh_max[0];
+    mesh_max[1] = pm->mesh_max[1];
+    mesh_max[2] = pm->mesh_max[2];
+
+    mesh_nside[0] = pm->mesh_nside[0];
+    mesh_nside[1] = pm->mesh_nside[1];
+    mesh_nside[2] = pm->mesh_nside[2];
+
+    int field_length = mesh_nside[0]*mesh_nside[1]*mesh_nside[2];
+    pm->local_field = (double*)xmalloc(sizeof(double)*field_length,4010);
+
+    for (i=0; i<field_length; i++)
+        pm->local_field[i] = 0.0;
+
+    int I,J,K, In, Jn, Kn, NX, NY, NZ;
+    double px, py, pz, pmx, pmy, pmz;
+    double x, y, z, wx, wy, wz, wxn, wyn, wzn;
+    double pos[3];
+    NX = mesh_nside[0];
+    NY = mesh_nside[1];
+    NZ = mesh_nside[2];
+
+    pmx = mesh_min[0]*delta;
+    pmy = mesh_min[1]*delta;
+    pmz = mesh_min[2]*delta;
+
+    /* asign particle into mesh by CIC */
+    for (n=0; n<npart; n++) {
+        pos[0] = part[n].pos[0];
+        pos[1] = part[n].pos[1];
+        pos[2] = part[n].pos[2];
+
+        px = pos[0] - pmx;
+        py = pos[1] - pmy;
+        pz = pos[2] - pmz;
+
+        I = (int)(pos[0]*invdelta);
+        if (pos[0] < bin[I])
+            I -= 1;
+
+        J = (int)(pos[1]*invdelta);
+        if (pos[1] < bin[J] )
+            J -= 1;
+
+        K = (int)(pos[2]*invdelta);
+        if (pos[2] < bin[K])
+            K -= 1;
+
+        I += 1 - mesh_min[0];
+        J += 1 - mesh_min[1];
+        K += 1 - mesh_min[2];
+
+        x = (I - 0.5)*delta;
+        y = (J - 0.5)*delta;
+        z = (K - 0.5)*delta;
+
+        wxn = (px - x)*invdelta;
+        wyn = (py - y)*invdelta;
+        wzn = (pz - z)*invdelta;
+
+        if (wxn<0.0) {
+            In = I - 1;
+            wxn = -wxn;
+        }
+        else
+            In = I + 1;
+
+        wx = 1.0 - wxn;
+
+        if (wyn<0.0) {
+            Jn = J - 1;
+            wyn = -wyn;
+        }
+        else
+            Jn = J + 1;
+
+        wy = 1.0 - wyn;
+
+        if (wzn<0.0) {
+            Kn = K - 1;
+            wzn = -wzn;
+        }
+        else
+            Kn = K + 1;
+
+        wz = 1.0 - wzn;
+
+        pm->local_field[(I *NY+J )*NZ+K ] += part[n].mass * wx *wy *wz ;
+        pm->local_field[(In*NY+J )*NZ+K ] += part[n].mass * wxn*wy *wz ;
+        pm->local_field[(I *NY+J )*NZ+Kn] += part[n].mass * wx *wy *wzn;
+        pm->local_field[(In*NY+Jn)*NZ+K ] += part[n].mass * wxn*wyn*wz ;
+        pm->local_field[(In*NY+J )*NZ+Kn] += part[n].mass * wxn*wy *wzn;
+        pm->local_field[(I *NY+Jn)*NZ+Kn] += part[n].mass * wx *wyn*wzn;
+        pm->local_field[(I *NY+Jn)*NZ+K ] += part[n].mass * wx *wyn*wz ;
+        pm->local_field[(In*NY+Jn)*NZ+Kn] += part[n].mass * wxn*wyn*wzn;
+    }
+    double vol = delta*delta*delta;
+    double density = 1.0/vol;
+
+    for (n=0; n<field_length; n++)
+        pm->local_field[n] *= density;
+    /* asign particle into mesh by CIC */
+}
 
 void* convolution_gravity(void *param)
 {
@@ -261,90 +419,6 @@ void* convolution_gravity(void *param)
     double px, py, pz, pmx, pmy, pmz;
     double x, y, z, wx, wy, wz, wxn, wyn, wzn;
     double pos[3];
-    NX = mesh_nside[0];
-    NY = mesh_nside[1];
-    NZ = mesh_nside[2];
-
-    pmx = mesh_min[0]*delta;
-    pmy = mesh_min[1]*delta;
-    pmz = mesh_min[2]*delta;
-
-    /* asign particle into mesh by CIC */
-    for (n=0; n<npart; n++) {
-        pos[0] = part[n].pos[0];
-        pos[1] = part[n].pos[1];
-        pos[2] = part[n].pos[2];
-
-        px = pos[0] - pmx;
-        py = pos[1] - pmy;
-        pz = pos[2] - pmz;
-
-        I = (int)(pos[0]*invdelta);
-        if (pos[0] < bin[I])
-            I -= 1;
-
-        J = (int)(pos[1]*invdelta);
-        if (pos[1] < bin[J] )
-            J -= 1;
-
-        K = (int)(pos[2]*invdelta);
-        if (pos[2] < bin[K])
-            K -= 1;
-
-        I += 1 - mesh_min[0];
-        J += 1 - mesh_min[1];
-        K += 1 - mesh_min[2];
-
-        x = (I - 0.5)*delta;
-        y = (J - 0.5)*delta;
-        z = (K - 0.5)*delta;
-
-        wxn = (px - x)*invdelta;
-        wyn = (py - y)*invdelta;
-        wzn = (pz - z)*invdelta;
-
-        if (wxn<0.0) {
-            In = I - 1;
-            wxn = -wxn;
-        }
-        else
-            In = I + 1;
-
-        wx = 1.0 - wxn;
-
-        if (wyn<0.0) {
-            Jn = J - 1;
-            wyn = -wyn;
-        }
-        else
-            Jn = J + 1;
-
-        wy = 1.0 - wyn;
-
-        if (wzn<0.0) {
-            Kn = K - 1;
-            wzn = -wzn;
-        }
-        else
-            Kn = K + 1;
-
-        wz = 1.0 - wzn;
-
-        pm_local_field[(I *NY+J )*NZ+K ] += part[n].mass * wx *wy *wz ;
-        pm_local_field[(In*NY+J )*NZ+K ] += part[n].mass * wxn*wy *wz ;
-        pm_local_field[(I *NY+J )*NZ+Kn] += part[n].mass * wx *wy *wzn;
-        pm_local_field[(In*NY+Jn)*NZ+K ] += part[n].mass * wxn*wyn*wz ;
-        pm_local_field[(In*NY+J )*NZ+Kn] += part[n].mass * wxn*wy *wzn;
-        pm_local_field[(I *NY+Jn)*NZ+Kn] += part[n].mass * wx *wyn*wzn;
-        pm_local_field[(I *NY+Jn)*NZ+K ] += part[n].mass * wx *wyn*wz ;
-        pm_local_field[(In*NY+Jn)*NZ+Kn] += part[n].mass * wxn*wyn*wzn;
-    }
-    double vol = delta*delta*delta;
-    double density = 1.0/vol;
-
-    for (n=0; n<field_length; n++)
-        pm_local_field[n] *= density;
-    /* asign particle into mesh by CIC */
 
     double *slab_send, *slab_recv;
     int slab_size, slab_size_max;
@@ -1013,9 +1087,9 @@ void* pm_acceleration(void* param)
             + dpdz[(I *NY+Jn)*NZ+K ]*wx *wyn*wz
             + dpdz[(In*NY+Jn)*NZ+Kn]*wxn*wyn*wzn;
 
-        part[n].acc[0] = accx;
-        part[n].acc[1] = accy;
-        part[n].acc[2] = accz;
+        part[n].acc_pm[0] = accx;
+        part[n].acc_pm[1] = accy;
+        part[n].acc_pm[2] = accz;
 
     }
 

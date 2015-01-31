@@ -17,11 +17,14 @@ typedef struct {
     Real mass;
     Real grav_const;
     Real a_time;
+    double *local_field;
 } Partmesh;
 
 Partmesh* create_partmesh(Constants *constants, Status *status, System *system);
+void* partmesh_acc(void *param);
 void free_partmesh(Partmesh *pm);
 
+void* assign_particles(void *param);
 void* convolution_gravity(void *param);
 void* pm_acceleration(void *param);
 

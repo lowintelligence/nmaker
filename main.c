@@ -18,19 +18,236 @@ int log_level = LOG_ALL;
 void warmUpMIC(const int micid, const int nppermic)
 {
 #ifdef __INTEL_OFFLOAD
-	size_t buf1cnt = (size_t)1048576*1024*2/sizeof(CalcBody);
-	size_t buf2cnt = (size_t)1048576*1024*1/sizeof(Node);
-	double *part = (double *)xmemalign(buf1cnt*sizeof(CalcBody), 129);
-	double *tree = (double *)xmemalign(buf2cnt*sizeof(Node), 130);
-#pragma offload target(mic:micid) inout (part[0:buf1cnt]:alloc_if(1) free_if(1)) inout (tree[0:buf2cnt]:alloc_if(1) free_if(1)) signal(tree)
-	{
-		;
-	}
+    size_t buf1cnt = 1048576*1024*2/sizeof(CalcBody);
+    size_t buf2cnt = 1048576*1024*1/sizeof(Node);
+    double *part = (double *)xmemalign(buf1cnt*sizeof(CalcBody), 129);
+    double *tree = (double *)xmemalign(buf2cnt*sizeof(Node), 130);
+#pragma offload target(mic:micid) inout (part[0:buf1cnt]:alloc_if(1) free_if(1)) inout (tree[0:buf2cnt]:alloc_if(1) free_if(1) signal(tree)
+    {
+        ;
+    }
 #pragma offload_wait target(mic:micid) wait(tree)
-	free(part);
-	free(tree);
+    free(part);
+    free(tree);
 #endif /* __INTEL_OFFLOAD */
 } /* warmUpMIC() */
+
+#ifdef REFINE_STEP
+int main(int argc, char* argv[])
+{
+    Constants constants;
+    Status status;
+    System sys;
+    Partmesh *pm_param;
+    Domain  *domain;
+    MPI_Init(&argc, &argv);
+
+
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (argc < 2) {
+        printf("miss the parameter files\n");
+    }
+
+    initialize_system(argv[1], &constants, &status, &sys);
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+#ifdef FFTW3_LIB
+    fftw_mpi_init();
+#endif /* FFTW3_LIB */
+
+    int p, n, m, d, Nstep;
+    Real time, t0, t1, dt;
+    Stepping *step;
+
+    Nstep = 120;
+    step = create_stepping_fixed_loga(&constants, Nstep, 0.02, 0.4);
+
+#ifdef TEST_STEP
+    if (0 == rank)
+        for (n=0; n<Nstep; n++) {
+            CLOG("%d %f %f %f\n", n, step->kick1[n], step->kick2[n], step->draft[n]);
+        }
+
+#endif
+    double start_pm, end_pm, dt_pm;
+
+
+#ifdef __INTEL_OFFLOAD
+    warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/contants.NMIC_PER_NODE);
+    if (rank == 0)
+        DBG_INFOL(DBG_MEMORY, "MIC memory warm-up finished.\n");
+#endif
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    double start_time, tstamp, end_time, start_step;
+    start_time = dtime();
+
+    int REFSTEP = 4;
+    for (n=0; n<Nstep; n++) {
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        if (0==rank) {
+            CLOG("\n - - - - - - - - - - step %5d - - - - - - - - - - \n", n);
+            CLOG(" z = %.5f\n", status.redshift);
+        }
+
+        if (status.redshift <= 0.0)
+            break;
+
+		if ( 0==n ) {
+			partition_system(&constants, &status, &sys);
+			domain = create_domain(&constants, &status, &sys);
+
+			mark_cuboid(domain) ;
+			broadcast_frontiers(domain, &sys) ;
+			printf(" * redistribute particles! - \n");
+
+			pm_param = create_partmesh(&constants, &status, &sys);
+			pthread_t pm_thread1, pm_thread2, pm_thread3;
+
+			pthread_create(&pm_thread1, NULL, assign_particles, pm_param);
+			pthread_join(pm_thread1, 0);
+
+			pthread_create(&pm_thread2, NULL, convolution_gravity, pm_param);
+
+
+			build_subtrees(domain, &constants);
+			printf( " * build subtree \n" );
+
+			pthread_join(pm_thread2, 0);
+
+			printf(" * PM gravity -  \n");
+
+			pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
+			pthread_join(pm_thread3, 0);
+			free_partmesh(pm_param);
+		}
+		kick1_system(step, &sys);
+		printf(" * kick system 1\n");
+
+
+		double rk1, rk2, rdr;
+		rk1 = step->kick1[n]/REFSTEP;
+		rk2 = step->kick2[n]/REFSTEP;
+		rdr = step->draft[n]/REFSTEP;
+		pthread_t pm_thrd;
+
+
+		for (m=0; m<REFSTEP; m++)
+		{
+			printf(" --- n = %d, m = %d ---\n", n, m);
+
+			if (0 == n && 0 == m) {
+				tree_traversal(domain, &constants);
+				printf(" * traversal - \n");
+			}
+			kick1_pp(rk1, &sys);
+			printf(" * kick sub 1\n");
+			draft_pp(rdr, &sys);
+			printf(" * draft sub \n");
+
+			if (REFSTEP - 1 == m) {
+				/* periodic boundaries */
+				double box = step->boxsize;
+				for (p=0; p<sys.num_part; p++) {
+					for (d=0; d<3; d++) {
+						double pos = (double) sys.part[p].pos[d];
+
+						if ( pos >= box )
+						{
+							pos -= box;
+						}
+						if ( pos < 0 )
+						{
+							pos += box;
+					}
+						sys.part[p].pos[d] = (Real) pos;
+
+						if (sys.part[p].pos[d] >= box ) {
+							printf(" bigger than bigger  %f box = %f %f\n", sys.part[p].pos[d], box, sys.part[p].vel[d] );
+							system_exit(0);
+						}
+						if (sys.part[p].pos[d] < 0) {
+							printf(" smaller than smaller  %f box = %f %f\n", sys.part[p].pos[d], box, sys.part[p].vel[d] );
+							system_exit(0);
+						}
+					}
+				}
+				/* periodic boundaries */
+
+				free_domain(domain);
+
+
+				partition_system(&constants, &status, &sys);
+				domain = create_domain(&constants, &status, &sys);
+
+				mark_cuboid(domain) ;
+				broadcast_frontiers(domain, &sys) ;
+				printf(" * redistribute particles!\n");
+
+				pm_param = create_partmesh(&constants, &status, &sys);
+				pthread_t pm_thread1, pm_thread2, pm_thread3;
+
+				pthread_create(&pm_thread1, NULL, assign_particles, pm_param);
+				pthread_join(pm_thread1, 0);
+
+				build_subtrees(domain, &constants);
+				printf( " * build subtree \n" );
+
+				pthread_create(&pm_thread2, NULL, convolution_gravity, pm_param);
+				printf(" * traversal  \n");
+				tree_traversal(domain, &constants);
+
+				pthread_join(pm_thread2, 0);
+				printf(" * PM gravity  \n");
+
+				pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
+				pthread_join(pm_thread3, 0);
+				free_partmesh(pm_param);
+			}
+			else {
+				printf(" * traversal  \n");
+				tree_traversal(domain, &constants);
+			}
+
+			kick2_pp(rk2, &sys);
+			printf(" * kick sub 2 \n");
+		}
+
+		kick2_system(step, &sys);
+		printf(" * kick system 2\n");
+		update_stepping(step);
+		status.redshift = 1.0/(step->time)-1.0;
+	}
+
+    free_domain(domain);
+    /* main loop */
+    free_stepping(step);
+
+    write_snapshot_node(sys.part, sys.num_part, "output_snap", &constants, &status);
+
+    finalize_system(&constants, &status, &sys);
+	
+    if (0==rank) {
+        end_time = dtime();
+        CLOG( " duration = %lf [sec]\n", tstamp-start_time);
+    }
+
+#ifdef FFTW3_LIB
+    fftw_mpi_cleanup();
+#endif /* FFTW3_LIB */
+
+    MPI_Finalize();
+
+    return 0;
+} /* main() */
+
+#else // REFINE_STEP
 
 int main(int argc, char* argv[])
 {
@@ -82,7 +299,7 @@ int main(int argc, char* argv[])
 
 
 #ifdef __INTEL_OFFLOAD
-	warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
+	warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/contants.NMIC_PER_NODE);
 	if (rank == 0)
 		DBG_INFOL(DBG_MEMORY, "MIC memory warm-up finished.\n");
 #endif
@@ -136,7 +353,6 @@ int main(int argc, char* argv[])
         }
         if (point_mass_rank == rank) {
             sys.part[0].mass = 1.0;
-
             pos_test[0] = sys.part[0].pos[0];
             pos_test[1] = sys.part[0].pos[1];
             pos_test[2] = sys.part[0].pos[2];
@@ -145,15 +361,21 @@ int main(int argc, char* argv[])
         MPI_Bcast(pos_test, 3*sizeof(double), MPI_CHAR, point_mass_rank, MPI_COMM_WORLD);
 #endif /* TEST_POT */
 
-        pm_param = create_partmesh(&constants, &status, &sys);
-        pthread_t pm_thread1, pm_thread2;
+		pm_param = create_partmesh(&constants, &status, &sys);
+		pthread_t pm_thread1, pm_thread2, pm_thread3;
 
-        pthread_create(&pm_thread1, NULL, convolution_gravity, pm_param);
-        pthread_join(pm_thread1, 0);
+		pthread_create(&pm_thread1, NULL, assign_particles, pm_param);
+		pthread_join(pm_thread1, 0);
 
-        pthread_create(&pm_thread2, NULL, pm_acceleration, pm_param);
-        pthread_join(pm_thread2, 0);
-        free_partmesh(pm_param);
+		pthread_create(&pm_thread2, NULL, convolution_gravity, pm_param);
+		pthread_join(pm_thread2, 0);
+
+
+		pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
+		pthread_join(pm_thread3, 0);
+		free_partmesh(pm_param);
+
+		DBG_INFO(DBG_LOGIC, "[%d] PM done !\n", rank);
 
 #ifdef TEST_POT
         if (0==n) {
@@ -276,4 +498,7 @@ int main(int argc, char* argv[])
 
     return 0;
 } /* main() */
+
+
+#endif /* REFINE_STEP */
 

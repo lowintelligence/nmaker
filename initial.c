@@ -3,6 +3,7 @@
 #include "iosnap.h"
 #include <assert.h>
 #include <string.h>
+#include <math.h>
 
 void readin_parameter_file(InputParam* param_ptr, char parameterfile[])
 {
@@ -229,6 +230,22 @@ void initialize_system(char fnamepara[], Constants *constparam_ptr, Status* stat
     constparam_ptr->CUTOFF_SCALE = 6.0*width_grid;
     constparam_ptr->GRAV_CONST = 43007.1;
 	constparam_ptr->EPS2 = 0.00026;
+
+#ifdef TABLEN
+    Real x, dx, rs;
+    Real sqrt_pi = sqrt(M_PI);
+    constparam_ptr->delta=(Real)(constparam_ptr->CUTOFF_SCALE)/((double)TABLEN);
+    dx = constparam_ptr->delta;
+    rs = constparam_ptr->SPLIT_SCALE;
+    for (n=0; n<TABLEN; n++) {
+        x = n*dx;
+        constparam_ptr->value[n]=(1.0-erf(x/2/rs)+(x/sqrt_pi/rs)*exp(-x*x/4/rs/rs))/pow( (x*x+rs*rs),1.5);
+    }
+    for (n=0; n<TABLEN-1; n++) {
+        constparam_ptr->slope[n]=(constparam_ptr->value[n+1] - constparam_ptr->value[n])/dx;
+    }
+#endif 
+
 	
 
 //    Long start_read = (Long)(((float)( rank_proc )/(num_proc))*(constparam_ptr->TOTAL_NUM_PART));

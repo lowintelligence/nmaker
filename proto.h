@@ -38,6 +38,7 @@ typedef struct {
     Vect3   pos;     // position of particle
     Vect3   vel;     // velocity of particle
     Vect3   acc;     // acceration of particle
+	Vect3   acc_pm;
     Real    mass;
     int     nstep;
 } Body;
