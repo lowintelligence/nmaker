@@ -11,13 +11,13 @@
 	#define SQRT sqrtf
 	#define INVSQRT invsqrtf
 	#define EXP expf
-	#define ERFC erfcf
+	#define ERFC (Real) 1.0 - erff
     typedef float Real;
 #else // NMK_SINGLE_PREC
 	#define SQRT sqrt
 	#define INVSQRT invsqrt
 	#define EXP exp
-	#define ERFC erfc
+	#define ERFC (Real) 1.0 - erf
     typedef double Real;
 #endif // NMK_SINGLE_PREC
 

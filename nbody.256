@@ -14,12 +14,12 @@ NTHTREE       8
 NPNODE        4
 MICNUM        2
 NTEAMCPU      8
-NTEAMMIC      30
+NTEAMMIC      60
 CPURATIO      0.16
 DYNLOAD       1
 TREEMAX       4
 TREEMIN       1
 NCRITI        128
-PPSIZE        1024
+PPSIZE        2048
 RNDPART       1
 ICPATH        ./data/ic_256

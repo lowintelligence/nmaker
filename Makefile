@@ -12,7 +12,7 @@ OPENMP=
 KMP_AFFINITY ?= compact
 NUM_PROCS ?= 4
 #NO_OFFLOAD=
-NO_OFFLOAD=-no-offload
+#NO_OFFLOAD=-no-offload
 STATIC=
 #STATIC=-static_mpi
 
@@ -21,13 +21,15 @@ MKLROOT?=/opt/intel/mkl
 #PRECISION=-DNMK_DOUBLE_PREC
 #FFTDEF=-DFFTW3_LIB
 DEBUG=-DNMK_DEBUG
-NAIVE=-DNMK_NAIVE_GRAVITY
+#PPMODE=-DNMK_NAIVE_GRAVITY 
+PPMODE=-DNMK_PP_TAB
+#STEP=-DNMK_REFINE_STEP
 #VERIFY=-DNMK_VERIFY #-DNMK_GEN_VER_FILE
 
 CC=mpiicc
 MICCC=icc
-CFLAGS=$(STATIC) -xHost -fimf-domain-exclusion=15 -O3 $(DEBUG) $(NAIVE) $(VERIFY) $(PRECISION) $(OPENMP) $(NO_OFFLOAD) $(FFTDEF) -g -traceback -Bdynamic -fno-omit-frame-pointer 
-CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(DEBUG) $(NAIVE) $(VERIFY) $(PRECISION) $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer
+CFLAGS=$(STATIC) -xHost -fimf-domain-exclusion=15 -O3 $(DEBUG) $(PPMODE) $(STEP) $(VERIFY) $(PRECISION) $(OPENMP) $(NO_OFFLOAD) $(FFTDEF) -g -traceback -Bdynamic -fno-omit-frame-pointer 
+CFLAGSMIC=-mmic -fimf-domain-exclusion=15 -O3 $(DEBUG) $(PPMODE) $(STEP) $(VERIFY) $(PRECISION) $(OPENMP) -g -traceback -Bdynamic -fno-omit-frame-pointer
 
 INC=-I$(MKLROOT)/include/fftw
 

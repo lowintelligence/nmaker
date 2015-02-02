@@ -146,7 +146,6 @@ void* assign_particles(void *param)
 {
     Partmesh *pm = (Partmesh*)param;
 
-    int rank, Nproc;
     int pm_nside = pm->pm_nside;
     int pm_nside_pad  = (pm_nside/2 + 1 )*2;
     int size_data;
@@ -336,11 +335,11 @@ void* convolution_gravity(void *param)
 
 //    fftw_mpi_local_size_3d_transposed((ptrdiff_t)pm_nside, (ptrdiff_t)pm_nside, (ptrdiff_t)pm_nside,
     fftw_mpi_local_size_3d((ptrdiff_t)pm_nside, (ptrdiff_t)pm_nside, (ptrdiff_t)pm_nside,
-                                      PM_COMM_WORLD,
-                                      (ptrdiff_t*)&local_n0, (ptrdiff_t*)&local_n0_start);
+                           PM_COMM_WORLD,
+                           (ptrdiff_t*)&local_n0, (ptrdiff_t*)&local_n0_start);
 //                                      (ptrdiff_t*)&local_n1, (ptrdiff_t*)&local_n1_start);
 
-	DBG_INFO(DBG_TMP, "%ld, %ld, PMWORLD=%ld, WORLD=%ld.\n", forward_plan, inverse_plan, PM_COMM_WORLD, MPI_COMM_WORLD);
+    DBG_INFO(DBG_TMP, "%ld, %ld, PMWORLD=%ld, WORLD=%ld.\n", forward_plan, inverse_plan, PM_COMM_WORLD, MPI_COMM_WORLD);
     local_nx = (int)local_n0;
     local_x_start = (int)local_n0_start;
     local_ny_after_transpose = (int)local_n0;
@@ -348,7 +347,7 @@ void* convolution_gravity(void *param)
 
     total_local_size = local_nx * pm_nside * 2 *(pm_nside/2+1);
 
-	DBG_INFO(DBG_TMP, "%ld, %ld, %ld, %ld, %d, %ld.\n", local_n0, local_n0_start, local_n1, local_n1_start, local_nx, total_local_size);
+    DBG_INFO(DBG_TMP, "%ld, %ld, %ld, %ld, %d, %ld.\n", local_n0, local_n0_start, local_n1, local_n1_start, local_nx, total_local_size);
     data = (double*) fftw_malloc(sizeof(double) * total_local_size);  /* 4008 */
     if ( !data ) {
         printf(" ERROR! : fail to alloc memory for data 4008 \n");
@@ -371,7 +370,7 @@ void* convolution_gravity(void *param)
                                             cdata, data,
                                             PM_COMM_WORLD, FFTW_ESTIMATE);
 
-	DBG_INFO(DBG_TMP, "%ld, %ld.\n", forward_plan, inverse_plan);
+    DBG_INFO(DBG_TMP, "%ld, %ld.\n", forward_plan, inverse_plan);
 
     size_data = sizeof(double);
 #endif /* FFTW3_LIB */
@@ -410,15 +409,9 @@ void* convolution_gravity(void *param)
     mesh_nside[2] = pm->mesh_nside[2];
 
     int field_length = mesh_nside[0]*mesh_nside[1]*mesh_nside[2];
-    double *pm_local_field = (double*)xmalloc(sizeof(double)*field_length,4010);
 
-    for (i=0; i<field_length; i++)
-        pm_local_field[i] = 0.0;
-
-    int I,J,K, In, Jn, Kn, NX, NY, NZ;
-    double px, py, pz, pmx, pmy, pmz;
-    double x, y, z, wx, wy, wz, wxn, wyn, wzn;
-    double pos[3];
+    double *pm_local_field = pm->local_field;
+    int I,J,K;
 
     double *slab_send, *slab_recv;
     int slab_size, slab_size_max;
@@ -453,16 +446,16 @@ void* convolution_gravity(void *param)
         slab_send[i] = 0.0;
     }
     first_index = pm_local_start[rank] * pm_nside_pad * pm_nside;
-    for (I=0; I<NX; I++) {
+    for (I=0; I<mesh_nside[0]; I++) {
         Ig = ( I + mesh_min[0] - 1 + pm_nside)%pm_nside;
-        for (J=0; J<NY; J++) {
+        for (J=0; J<mesh_nside[1]; J++) {
             Jg = ( J + mesh_min[1] - 1 + pm_nside)%pm_nside;
-            for (K=0; K<NZ; K++) {
+            for (K=0; K<mesh_nside[2]; K++) {
                 Kg = ( K + mesh_min[2] - 1 + pm_nside)%pm_nside;
                 index = (Ig * pm_nside + Jg ) * pm_nside_pad + Kg;
                 index -= first_index;
                 if (0<=index && index<slab_size)
-                    slab_send[index] += pm_local_field[(I*NY+J)*NZ+K];
+                    slab_send[index] += pm_local_field[(I*mesh_nside[1]+J)*mesh_nside[2]+K];
             }
         }
     }
@@ -483,16 +476,16 @@ void* convolution_gravity(void *param)
                 slab_send[i] = slab_recv[i] = 0.0;
             first_index = pm_local_start[conj] * pm_nside_pad * pm_nside;
 
-            for (I=0; I<NX; I++) {
+            for (I=0; I<mesh_nside[0]; I++) {
                 Ig = ( I + mesh_min[0] - 1 + pm_nside)%pm_nside;
-                for (J=0; J<NY; J++) {
+                for (J=0; J<mesh_nside[1]; J++) {
                     Jg = ( J + mesh_min[1] - 1 + pm_nside)%pm_nside;
-                    for (K=0; K<NZ; K++) {
+                    for (K=0; K<mesh_nside[2]; K++) {
                         Kg = ( K + mesh_min[2] - 1 + pm_nside)%pm_nside;
                         index = (Ig * pm_nside + Jg ) * pm_nside_pad + Kg;
                         index -= first_index;
                         if (0<=index && index<slab_size_conj)
-                            slab_send[index] += pm_local_field[(I*NY+J)*NZ+K];
+                            slab_send[index] += pm_local_field[(I*mesh_nside[1]+J)*mesh_nside[2]+K];
                     }
                 }
             }

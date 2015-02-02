@@ -5,7 +5,9 @@
 #include "proto.h"
 #include "nmk_utils.h"
 
-//#define TABLEN 128
+#ifdef NMK_PP_TAB
+#define TABLEN 128
+#endif
 
 typedef struct {
     /* phyical parameters */
@@ -34,7 +36,7 @@ typedef struct {
 	int  MAX_PACKAGE_SIZE;
 	int  MIC_PP_THRESHOLD;
     int  PM_NUM_SIDE;
-#ifdef TABLEN
+#ifdef NMK_PP_TAB
     Real delta;
     Real value[TABLEN];
     Real slope[TABLEN];

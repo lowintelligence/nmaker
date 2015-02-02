@@ -9,7 +9,7 @@ static double OmegaM, OmegaX;
 static int Nblock;
 
 void kick1_system(Stepping *st, System *sys)
-{ 
+{
     Int n, npart;
     npart = sys->num_part;
     Body *part = sys->part;
@@ -17,13 +17,13 @@ void kick1_system(Stepping *st, System *sys)
     double kick1 = st->kick1[st->step];
     for (n=0; n<npart; n++) {
         for (d=0; d<3; d++) {
-            part[n].vel[d] += kick1 * part[n].acc[d];
+            part[n].vel[d] += kick1 * part[n].acc_pm[d];
         }
     }
 }
 
 void kick2_system(Stepping *st, System *sys)
-{ 
+{
     Int n, npart;
     npart = sys->num_part;
     Body *part = sys->part;
@@ -31,7 +31,7 @@ void kick2_system(Stepping *st, System *sys)
     double kick2 = st->kick2[st->step];
     for (n=0; n<npart; n++) {
         for (d=0; d<3; d++) {
-            part[n].vel[d] += kick2 * part[n].acc[d];
+            part[n].vel[d] += kick2 * part[n].acc_pm[d];
         }
     }
 }
@@ -55,7 +55,7 @@ void draft_system(Stepping *st, System *sys)
 			}
             if ( pos < 0 )
 			{
-                pos += box;
+				pos += box;
 			}
 		
 			part[n].pos[d] = (Real) pos;
@@ -66,11 +66,51 @@ void draft_system(Stepping *st, System *sys)
             if (part[n].pos[d] >= (Real) st->boxsize ) {
                 printf(" bigger than bigger  %f box = %f %f\n", part[n].pos[d], box, part[n].vel[d] );
                 system_exit(0);
-            }
+			}
             if (part[n].pos[d] < 0) {
                 printf(" smaller than smaller  %f box = %f %f\n", part[n].pos[d], box, part[n].vel[d] );
                 system_exit(0);
             }
+        }
+    }
+}
+
+
+void kick1_pp(double k1, System *sys)
+{
+    Int n, npart;
+    npart = sys->num_part;
+    Body *part = sys->part;
+    int d;
+    for (n=0; n<npart; n++) {
+        for (d=0; d<3; d++) {
+            part[n].vel[d] += k1 * (part[n].acc[d] + part[n].acc_pm[d]);
+        }
+    }
+}
+
+void kick2_pp(double k2, System *sys)
+{
+    Int n, npart;
+    npart = sys->num_part;
+    Body *part = sys->part;
+    int d;
+    for (n=0; n<npart; n++) {
+        for (d=0; d<3; d++) {
+            part[n].vel[d] += k2 * (part[n].acc[d] + part[n].acc_pm[d]);
+        }
+    }
+}
+
+void draft_pp(double dr, System *sys)
+{
+    Int n, npart;
+    npart = sys->num_part;
+    Body *part = sys->part;
+    int d;
+    for (n=0; n<npart; n++) {
+        for (d=0; d<3; d++) {
+            part[n].pos[d] += dr * part[n].vel[d];
         }
     }
 }

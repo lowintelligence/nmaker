@@ -138,7 +138,7 @@ void init_random_particles(Constants *constants, System *sys, Long n_start, Long
 			sys->part[n].pos[m] = (Real) drand48()*24998.0+87501.0;
 			sys->part[n].vel[m] = (Real) 0.0;
 #else
-//			sys->part[n].pos[m] = (Real) drand48()*constants->BOX_SIZE;
+			sys->part[n].pos[m] = (Real) drand48()*constants->BOX_SIZE;
 			sys->part[n].vel[m] = (Real) drand48()*velocity;
 #endif
 			sys->part[n].acc[m]	= (Real) 0.0;
@@ -231,7 +231,7 @@ void initialize_system(char fnamepara[], Constants *constparam_ptr, Status* stat
     constparam_ptr->GRAV_CONST = 43007.1;
 	constparam_ptr->EPS2 = 0.00026;
 
-#ifdef TABLEN
+#ifdef NMK_PP_TAB
     Real x, dx, rs;
     Real sqrt_pi = sqrt(M_PI);
     constparam_ptr->delta=(Real)(constparam_ptr->CUTOFF_SCALE)/((double)TABLEN);

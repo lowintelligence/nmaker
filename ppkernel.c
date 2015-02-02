@@ -169,46 +169,20 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
     int n;
 
 #ifndef __MULTI_THREAD_
+#ifdef NMK_PP_TAB
+	int idx;
+	Real dlt  = constants->delta;
+	Real *val = constants->value;
+	Real *slp = constants->slope;
+	Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
+#else
 	Real eps2 = constants->EPS2;
 	Real invrs = (Real) 1.0 / constants->SPLIT_SCALE;
 	Real invrs2 = (Real) -0.5 * invrs * invrs;
 	Real invpirs = (Real) RSQRTPI * invrs;
 	Real inv2rs = (Real) 0.5 * invrs;
 	Real rc = constants->CUTOFF_SCALE;
-	Real G = constants->GRAV_CONST;
-#endif
-
-#ifdef TABLEN
-    int m;
-    int idx;
-    Real dlt  = constants->delta;
-    Real *val = constants->value;
-    Real *slp = constants->slope;
-    Real dx1, dy1, dz1, dr21;
-    Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
-
-
-    for ( n=0; n<la; n++ ) {
-        for ( m=0; m<lb; m++) {
-            dx1 = B.x[m] -  A.x[n];
-            dy1 = B.y[m] -  A.y[n];
-            dz1 = B.z[m] -  A.z[n];
-            
-            dr21 = sqrt(dx1*dx1 + dy1*dy1 + dz1*dz1);
-            idx = (int)(rad2idx*dr21);
-            if (idx<TABLEN) {
-                dr21 = val[idx] + ( dr21 - dlt * idx ) * slp[idx];
-            }
-            else {
-                dr21 = 0.0;                
-            }                     
-            C.x[n] += dx1*dr21;
-            C.y[n] += dy1*dr21;
-            C.z[n] += dz1*dr21;
-
-        }
-    }
-    return 0;
+#endif // NMK_PP_TAB
 #endif
 
     /* Origin version of ppkernel 
@@ -245,13 +219,61 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #pragma omp parallel
 #endif
 	{
-		int j, k, m, nb, mb, nt, mt;
+		int j, k, m, nb, mb, mt;
 
 		Real x2, y2, z2, ax2, ay2, az2;
 		Real dx1, dy1, dz1, dd1, dg1, dr1, dr21, dr31;
 		Real dx2, dy2, dz2, dd2, dg2, dr2, dr22, dr32;
 		Real dx3, dy3, dz3, dd3, dg3, dr3, dr23, dr33;
 		Real dx4, dy4, dz4, dd4, dg4, dr4, dr24, dr34;
+
+//#ifdef TABLEN
+//		int idx;
+//		Real dlt  = constants->delta;
+//		Real *val = constants->value;
+//		Real *slp = constants->slope;
+//		Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
+//
+//		int pern = la/tnum;
+//		int modn = la%tnum;
+//		int tpass = modn-tid;
+//		int tex = (tnum+tpass-1)/tnum;
+//		int ns = tid*pern+(modn-tex*tpass);
+//		int nt = ns + pern + tex;
+//
+//		for ( j=ns; j<nt; j++ )
+//		{
+//			ax2=0;
+//			ay2=0;
+//			az2=0;
+//
+//			for ( m=0; m<lb; m++)
+//			{
+//				dx1 = B.x[m] -  A.x[j];
+//				dy1 = B.y[m] -  A.y[j];
+//				dz1 = B.z[m] -  A.z[j];
+//
+//				dr21 = SQRT(dx1*dx1 + dy1*dy1 + dz1*dz1);
+//				idx = (int)(rad2idx*dr21);
+//				dr31 = (idx<TABLEN) ? val[idx] + ( dr21 - dlt * idx ) * slp[idx] : 0;
+////				if (idx<TABLEN)
+////				{
+////					dr31 = val[idx] + ( dr21 - dlt * idx ) * slp[idx];
+////				}
+////				else
+////				{
+////					dr31 = 0;
+////				}
+//
+//				ax2 += dx1*dr31 ;
+//				ay2 += dy1*dr31 ;
+//				az2 += dz1*dr31 ;
+//			}
+//			C.x[j] += ax2;
+//			C.y[j] += ay2;
+//			C.z[j] += az2;
+//		}
+//#else // TABLEN
 
 #ifdef __MULTI_THREAD_
 		int tid, tnum;
@@ -261,7 +283,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 //		printf ("%ld, %d, %ld, %d, %ld, %d, %d.\n", A.x, la, B.x, lb, C.x, tnum, tid);
 //		return (0);
 
-#if 1 // Set 0 to Debug	
+#if 1 // Set 0 to debug	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
 
@@ -281,7 +303,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 
 			for ( n=nbs; n<nbt; n++ ) {
 
-				nt = (n==nb-1) ? la : (n+1)*CLCNT;
+				int nt = (n==nb-1) ? la : (n+1)*CLCNT;
 
 				for (m=0; m<mb; m++) {
 #ifdef __MULTI_THREAD_
@@ -329,6 +351,10 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+								idx = (int)(rad2idx * dr1);
+								dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
+#else // NMK_PP_TAB
 								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 								dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
@@ -337,6 +363,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 								dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 								ax2 += dx1*dr31 ;
@@ -428,21 +455,44 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
-								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-								dr21 = eps2+dd1;
 #if (UNROLL > 1)
 								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 								dr2 = SQRT(dd2);
-								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-								dr22 = eps2+dd2;
 #if (UNROLL >=4)
 								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 								dr3 = SQRT(dd3);
-								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-								dr23 = eps2+dd3;
 
 								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 								dr4 = SQRT(dd4);
+#endif
+#endif
+
+#ifdef NMK_PP_TAB
+								idx = (int)(rad2idx * dr1);
+								dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
+#if (UNROLL > 1)
+								idx = (int)(rad2idx * dr2);
+								dr32 = (idx<TABLEN) ? val[idx] + ( dr2 - dlt * idx ) * slp[idx] : 0;
+#if (UNROLL >=4)
+								idx = (int)(rad2idx * dr3);
+								dr33 = (idx<TABLEN) ? val[idx] + ( dr3 - dlt * idx ) * slp[idx] : 0;
+
+								idx = (int)(rad2idx * dr4);
+								dr34 = (idx<TABLEN) ? val[idx] + ( dr4 - dlt * idx ) * slp[idx] : 0;
+#endif
+#endif
+
+#else // NMK_PP_TAB
+
+								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+								dr21 = eps2+dd1;
+#if (UNROLL > 1)
+								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
+								dr22 = eps2+dd2;
+#if (UNROLL >=4)
+								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
+								dr23 = eps2+dd3;
+
 								dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 								dr24 = eps2+dd4;
 #endif
@@ -470,6 +520,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #endif
 #endif // NMK_SINGLE_PREC
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
@@ -554,6 +605,10 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+							idx = (int)(rad2idx * dr1);
+							dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
+#else // NMK_PP_TAB
 							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 							dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
@@ -562,6 +617,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 							dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 							ax2 += dx1*dr31 ;
@@ -635,21 +691,43 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
-							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-							dr21 = eps2+dd1;
 #if (UNROLL > 1)
 							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 							dr2 = SQRT(dd2);
-							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-							dr22 = eps2+dd2;
 #if (UNROLL >=4)
 							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 							dr3 = SQRT(dd3);
-							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-							dr23 = eps2+dd3;
 
 							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 							dr4 = SQRT(dd4);
+#endif
+#endif
+
+#ifdef NMK_PP_TAB
+							idx = (int)(rad2idx * dr1);
+							dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
+#if (UNROLL > 1)
+							idx = (int)(rad2idx * dr2);
+							dr32 = (idx<TABLEN) ? val[idx] + ( dr2 - dlt * idx ) * slp[idx] : 0;
+#if (UNROLL >=4)
+							idx = (int)(rad2idx * dr3);
+							dr33 = (idx<TABLEN) ? val[idx] + ( dr3 - dlt * idx ) * slp[idx] : 0;
+
+							idx = (int)(rad2idx * dr4);
+							dr34 = (idx<TABLEN) ? val[idx] + ( dr4 - dlt * idx ) * slp[idx] : 0;
+#endif
+#endif
+
+#else // NMK_PP_TAB
+							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+							dr21 = eps2+dd1;
+#if (UNROLL > 1)
+							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
+							dr22 = eps2+dd2;
+#if (UNROLL >=4)
+							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
+							dr23 = eps2+dd3;
+
 							dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 							dr24 = eps2+dd4;
 #endif
@@ -677,6 +755,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #endif
 #endif // NMK_SINGLE_PREC
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
@@ -740,6 +819,10 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else // NMK_NAIVE_GRAVITY
 					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 					dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+					idx = (int)(rad2idx * dr1);
+					dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
+#else // NMK_PP_TAB
 					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 					dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
@@ -748,6 +831,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 					dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 					C.x[k] += dx1*dr31 ;
@@ -764,7 +848,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 		int tpass = modn-tid;
 		int tex = (tnum+tpass-1)/tnum;
 		int ns = tid*pern+(modn-tex*tpass);
-		nt = ns + pern + tex;
+		int nt = ns + pern + tex;
 		for (j=ns; j<nt; j++)
 		{
 			x2=A.x[j];
@@ -790,15 +874,21 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #endif
 
 #else // NMK_NAIVE_GRAVITY
-					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-					dr1 = SQRT(dd1);
-					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-					dr21 = eps2+dd1;
+				dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+				dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+				idx = (int)(rad2idx * dr1);
+				dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
+#else // NMK_PP_TAB
+				dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+				dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
-					dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+				dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
-					dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
+				dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 				ax2 += dx1*dr31 ;
@@ -810,6 +900,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 			C.z[j] += az2;
 		}
 #endif // #if 1
+//#endif // TABLEN
 	}
 #ifdef __MULTI_THREAD_
     tstop = dtime();
@@ -828,47 +919,47 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
     int n;
 
 #ifndef __MULTI_THREAD_
+#ifdef NMK_PP_TAB
+	int idx;
+	Real dlt  = constants->delta;
+	Real *val = constants->value;
+	Real *slp = constants->slope;
+	Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
+#else
 	Real eps2 = constants->EPS2;
 	Real invrs = (Real) 1.0 / constants->SPLIT_SCALE;
 	Real invrs2 = (Real) -0.5 * invrs * invrs;
 	Real invpirs = (Real) RSQRTPI * invrs;
 	Real inv2rs = (Real) 0.5 * invrs;
 	Real rc = constants->CUTOFF_SCALE;
-	Real G = constants->GRAV_CONST;
+#endif // NMK_PP_TAB
 #endif
 
-#ifdef TABLEN
-    int m;
-    int idx;
-    Real dlt  = constants->delta;
-    Real *val = constants->value;
-    Real *slp = constants->slope;
-    Real dx1, dy1, dz1, dr21;
-    Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
-
+    /* Origin version of ppkernel with mass
+    printf("Starting Compute\n");
+    
+    tstart = dtime();
+    
     for ( n=0; n<la; n++ ) {
         for ( m=0; m<lb; m++) {
             dx1 = B.x[m] -  A.x[n];
             dy1 = B.y[m] -  A.y[n];
             dz1 = B.z[m] -  A.z[n];
             
-            dr21 = sqrt(dx1*dx1 + dy1*dy1 + dz1*dz1);
-            idx = (int)(rad2idx*dr21);
-            if (idx<TABLEN) {
-                dr21 = val[idx] + ( dr21 - dlt * idx ) * slp[idx];
-            }
-            else {
-                dr21 = 0.0;                
-            }                     
-
-            C.x[n] += dx1*dr21*Bm[m];
-            C.y[n] += dy1*dr21*Bm[m];
-            C.z[n] += dz1*dr21*Bm[m];
-
+            dr21 = eps2 + dx*dx + dy*dy + dz*dz;
+            dr31 = Bm[m] * SQRT(dr2)*dr2;
+            
+            C.x[n] += dx1/dr31;
+            C.y[n] += dy1/dr31;
+            C.z[n] += dz1/dr31;
         }
     }
-    return 0;
-#endif
+
+    tstop = dtime();
+    
+    ttime = tstop - tstart;
+    printf("dtime = %lf \n", ttime);
+    */
 
 
 #ifdef __MULTI_THREAD_
@@ -878,7 +969,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #pragma omp parallel
 #endif
 	{
-		int j, k, m, nb, mb, nt, mt;
+		int j, k, m, nb, mb, mt;
 
 		Real x2, y2, z2, ax2, ay2, az2;
 		Real dx1, dy1, dz1, dd1, dg1, dr1, dr21, dr31;
@@ -886,13 +977,61 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		Real dx3, dy3, dz3, dd3, dg3, dr3, dr23, dr33;
 		Real dx4, dy4, dz4, dd4, dg4, dr4, dr24, dr34;
 
+//#ifdef TABLEN
+//		int idx;
+//		Real dlt  = constants->delta;
+//		Real *val = constants->value;
+//		Real *slp = constants->slope;
+//		Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
+//
+//		int pern = la/tnum;
+//		int modn = la%tnum;
+//		int tpass = modn-tid;
+//		int tex = (tnum+tpass-1)/tnum;
+//		int ns = tid*pern+(modn-tex*tpass);
+//		int nt = ns + pern + tex;
+//
+//		for ( j=ns; j<nt; j++ )
+//		{
+//			ax2=0;
+//			ay2=0;
+//			az2=0;
+//
+//			for ( m=0; m<lb; m++)
+//			{
+//				dx1 = B.x[m] -  A.x[j];
+//				dy1 = B.y[m] -  A.y[j];
+//				dz1 = B.z[m] -  A.z[j];
+//
+//				dr21 = SQRT(dx1*dx1 + dy1*dy1 + dz1*dz1);
+//				idx = (int)(rad2idx*dr21);
+//				dr31 = (idx<TABLEN) ? Bm[m] * (val[idx] + ( dr21 - dlt * idx ) * slp[idx]) : 0;
+////				if (idx<TABLEN)
+////				{
+////					dr31 = Bm[m] * (val[idx] + ( dr21 - dlt * idx ) * slp[idx]);
+////				}
+////				else
+////				{
+////					dr31 = 0;
+////				}
+//
+//				ax2 += dx1*dr31 ;
+//				ay2 += dy1*dr31 ;
+//				az2 += dz1*dr31 ;
+//			}
+//			C.x[j] += ax2;
+//			C.y[j] += ay2;
+//			C.z[j] += az2;
+//		}
+//#else // TABLEN
+
 #ifdef __MULTI_THREAD_
 		int tid, tnum;
 		tid = get_block_tid(0);
 		tnum = get_block_tnum(0);
 #endif
 
-#if 1
+#if 1 // Set 0 to debug
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
 
@@ -912,7 +1051,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 
 			for ( n=nbs; n<nbt; n++ )
 			{
-				nt = (n==nb-1) ? la : (n+1)*CLCNT;
+				int nt = (n==nb-1) ? la : (n+1)*CLCNT;
 
 				for (m=0; m<mb; m++)
 				{
@@ -961,6 +1100,10 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+								idx = (int)(rad2idx * dr1);
+								dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
+#else // NMK_PP_TAB
 								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 								dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
@@ -969,6 +1112,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 								dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 								ax2 += dx1*dr31 ;
@@ -1061,21 +1205,43 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 								dr1 = SQRT(dd1);
-								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-								dr21 = eps2+dd1;
 #if (UNROLL > 1)
 								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 								dr2 = SQRT(dd2);
-								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-								dr22 = eps2+dd2;
 #if (UNROLL >=4)
 								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 								dr3 = SQRT(dd3);
-								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-								dr23 = eps2+dd3;
 
 								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 								dr4 = SQRT(dd4);
+#endif
+#endif
+
+#ifdef NMK_PP_TAB
+								idx = (int)(rad2idx * dr1);
+								dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
+#if (UNROLL > 1)
+								idx = (int)(rad2idx * dr2);
+								dr32 = (idx<TABLEN) ? Bm[k+N_CACHE/UNROLL] * (val[idx] + ( dr2 - dlt * idx ) * slp[idx]) : 0;
+#if (UNROLL >=4)
+								idx = (int)(rad2idx * dr3);
+								dr33 = (idx<TABLEN) ? Bm[k+2*N_CACHE/UNROLL] * (val[idx] + ( dr3 - dlt * idx ) * slp[idx]) : 0;
+
+								idx = (int)(rad2idx * dr4);
+								dr34 = (idx<TABLEN) ? Bm[k+3*N_CACHE/UNROLL] * (val[idx] + ( dr4 - dlt * idx ) * slp[idx]) : 0;
+#endif
+#endif
+
+#else // NMK_PP_TAB
+								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+								dr21 = eps2+dd1;
+#if (UNROLL > 1)
+								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
+								dr22 = eps2+dd2;
+#if (UNROLL >=4)
+								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
+								dr23 = eps2+dd3;
+
 								dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 								dr24 = eps2+dd4;
 #endif
@@ -1103,6 +1269,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #endif
 #endif // NMK_SINGLE_PREC
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
@@ -1187,6 +1354,10 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+							idx = (int)(rad2idx * dr1);
+							dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
+#else // NMK_PP_TAB
 							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 							dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
@@ -1195,6 +1366,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 							dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 							ax2 += dx1*dr31 ;
@@ -1268,21 +1440,43 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 							dr1 = SQRT(dd1);
-							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-							dr21 = eps2+dd1;
 #if (UNROLL > 1)
 							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
 							dr2 = SQRT(dd2);
-							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-							dr22 = eps2+dd2;
 #if (UNROLL >=4)
 							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
 							dr3 = SQRT(dd3);
-							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-							dr23 = eps2+dd3;
 
 							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
 							dr4 = SQRT(dd4);
+#endif
+#endif
+
+#ifdef NMK_PP_TAB
+							idx = (int)(rad2idx * dr1);
+							dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
+#if (UNROLL > 1)
+							idx = (int)(rad2idx * dr2);
+							dr32 = (idx<TABLEN) ? Bm[k+N_CACHE/UNROLL] * (val[idx] + ( dr2 - dlt * idx ) * slp[idx]) : 0;
+#if (UNROLL >=4)
+							idx = (int)(rad2idx * dr3);
+							dr33 = (idx<TABLEN) ? Bm[k+2*N_CACHE/UNROLL] * (val[idx] + ( dr3 - dlt * idx ) * slp[idx]) : 0;
+
+							idx = (int)(rad2idx * dr4);
+							dr34 = (idx<TABLEN) ? Bm[k+3*N_CACHE/UNROLL] * (val[idx] + ( dr4 - dlt * idx ) * slp[idx]) : 0;
+#endif
+#endif
+
+#else // NMK_PP_TAB
+							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+							dr21 = eps2+dd1;
+#if (UNROLL > 1)
+							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
+							dr22 = eps2+dd2;
+#if (UNROLL >=4)
+							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
+							dr23 = eps2+dd3;
+
 							dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
 							dr24 = eps2+dd4;
 #endif
@@ -1310,6 +1504,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #endif
 #endif // NMK_SINGLE_PREC
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 #if (UNROLL == 4)
@@ -1372,6 +1567,10 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else // NMK_NAIVE_GRAVITY
 					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
 					dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+					idx = (int)(rad2idx * dr1);
+					dr31 = (idx<TABLEN) ? Bm[m] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
+#else // NMK_PP_TAB
 					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
 					dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
@@ -1380,6 +1579,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 					dr31 = Bm[m] * dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
 
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 					C.x[k] += dx1*dr31 ;
@@ -1395,7 +1595,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		int tpass = modn-tid;
 		int tex = (tnum+tpass-1)/tnum;
 		int ns = tid*pern+(modn-tex*tpass);
-		nt = ns + pern + tex;
+		int nt = ns + pern + tex;
 		for (j=ns; j<nt; j++)
 		{
 			x2=A.x[j];
@@ -1421,15 +1621,21 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #endif
 
 #else // NMK_NAIVE_GRAVITY
-					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-					dr1 = SQRT(dd1);
-					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-					dr21 = eps2+dd1;
+				dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
+				dr1 = SQRT(dd1);
+#ifdef NMK_PP_TAB
+				idx = (int)(rad2idx * dr1);
+				dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
+#else // NMK_PP_TAB
+				dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
+				dr21 = eps2+dd1;
 #ifdef NMK_SINGLE_PREC
-					dr31 = Bm[m] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
+				dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
 #else
-					dr31 = Bm[m] * dg1 * INVSQRT(dr21 * dr21 * dr21);
+				dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
 #endif
+
+#endif // NMK_PP_TAB
 #endif // NMK_NAIVE_GRAVITY
 
 				ax2 += dx1*dr31 ;
@@ -1440,7 +1646,8 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 			C.y[j] += ay2;
 			C.z[j] += az2;
 		}
-#endif
+#endif // if 1
+//#endif // TABLEN
 	}
 
 #ifdef __MULTI_THREAD_

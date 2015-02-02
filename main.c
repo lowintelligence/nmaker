@@ -18,11 +18,11 @@ int log_level = LOG_ALL;
 void warmUpMIC(const int micid, const int nppermic)
 {
 #ifdef __INTEL_OFFLOAD
-    size_t buf1cnt = 1048576*1024*2/sizeof(CalcBody);
-    size_t buf2cnt = 1048576*1024*1/sizeof(Node);
-    double *part = (double *)xmemalign(buf1cnt*sizeof(CalcBody), 129);
-    double *tree = (double *)xmemalign(buf2cnt*sizeof(Node), 130);
-#pragma offload target(mic:micid) inout (part[0:buf1cnt]:alloc_if(1) free_if(1)) inout (tree[0:buf2cnt]:alloc_if(1) free_if(1) signal(tree)
+	size_t buf1cnt = (size_t)1048576*1024*2/sizeof(CalcBody);
+	size_t buf2cnt = (size_t)1048576*1024*1/sizeof(Node);
+	double *part = (double *)xmemalign(buf1cnt*sizeof(CalcBody), 129);
+	double *tree = (double *)xmemalign(buf2cnt*sizeof(Node), 130);
+#pragma offload target(mic:micid) inout (part[0:buf1cnt]:alloc_if(1) free_if(1)) inout (tree[0:buf2cnt]:alloc_if(1) free_if(1)) signal(tree)
     {
         ;
     }
@@ -32,7 +32,7 @@ void warmUpMIC(const int micid, const int nppermic)
 #endif /* __INTEL_OFFLOAD */
 } /* warmUpMIC() */
 
-#ifdef REFINE_STEP
+#ifdef NMK_REFINE_STEP
 int main(int argc, char* argv[])
 {
     Constants constants;
@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
 
 
 #ifdef __INTEL_OFFLOAD
-    warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/contants.NMIC_PER_NODE);
+//    warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
     if (rank == 0)
         DBG_INFOL(DBG_MEMORY, "MIC memory warm-up finished.\n");
 #endif
@@ -247,7 +247,7 @@ int main(int argc, char* argv[])
     return 0;
 } /* main() */
 
-#else // REFINE_STEP
+#else // NMK_REFINE_STEP
 
 int main(int argc, char* argv[])
 {
@@ -284,9 +284,11 @@ int main(int argc, char* argv[])
 
 // The first PM
     pm_param = create_partmesh(&constants, &status, &sys);
+	assign_particles(pm_param);
     convolution_gravity(pm_param);
 
     pm_acceleration(pm_param);
+	free_partmesh(pm_param);
 
 #ifdef TEST_STEP
     if (0 == rank)
@@ -299,7 +301,7 @@ int main(int argc, char* argv[])
 
 
 #ifdef __INTEL_OFFLOAD
-	warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/contants.NMIC_PER_NODE);
+//	warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
 	if (rank == 0)
 		DBG_INFOL(DBG_MEMORY, "MIC memory warm-up finished.\n");
 #endif
@@ -369,7 +371,6 @@ int main(int argc, char* argv[])
 
 		pthread_create(&pm_thread2, NULL, convolution_gravity, pm_param);
 		pthread_join(pm_thread2, 0);
-
 
 		pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
 		pthread_join(pm_thread3, 0);
@@ -500,5 +501,5 @@ int main(int argc, char* argv[])
 } /* main() */
 
 
-#endif /* REFINE_STEP */
+#endif /* NMK_REFINE_STEP */
 
