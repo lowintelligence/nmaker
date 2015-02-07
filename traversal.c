@@ -834,7 +834,7 @@ void tree_traversal(Domain *dp, Constants *constants)
 
 	for (i=0; i<npart; i++)
 	{
-#ifdef NMK_NAIVE_GRAVITY
+#if (defined NMK_NAIVE_GRAVITY) || (defined NMK_PP_TAB)
 		fpart[i].acc[0] += part[i].acc[0];
 		fpart[i].acc[1] += part[i].acc[1];
 		fpart[i].acc[2] += part[i].acc[2];

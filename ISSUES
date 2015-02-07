@@ -3,6 +3,13 @@
 2. When tree node reaches the MAX_TREE_LEVEL but the particles exceeding MAX_PACKAGE_SIZE, may be not stable.
 
 ******************** Code fixing history ********************
+------------------2015/02/08 7:00--------------------
+ppkernel.c
+	Corrected two numeric mistake in ppkernel.
+
+traversal.c
+	Fixed the addition of acceleration with NMK_PP_TAB defined, do not need to multiply the GRAVITY const.
+	
 ------------------2015/01/30 0:00--------------------
 inital.c
 traversal.c

@@ -12,7 +12,7 @@
 #include <math.h>
 #include <assert.h>
 
-#define RSQRTPI 1.772453850905516027298
+#define RSQRTPI 0.564189583547756286948
 
 int packarray3(CalcBody* pp, int n, Array3 pa)
 {
@@ -178,7 +178,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #else
 	Real eps2 = constants->EPS2;
 	Real invrs = (Real) 1.0 / constants->SPLIT_SCALE;
-	Real invrs2 = (Real) -0.5 * invrs * invrs;
+	Real invrs2 = (Real) -0.25 * invrs * invrs;
 	Real invpirs = (Real) RSQRTPI * invrs;
 	Real inv2rs = (Real) 0.5 * invrs;
 	Real rc = constants->CUTOFF_SCALE;
@@ -928,7 +928,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #else
 	Real eps2 = constants->EPS2;
 	Real invrs = (Real) 1.0 / constants->SPLIT_SCALE;
-	Real invrs2 = (Real) -0.5 * invrs * invrs;
+	Real invrs2 = (Real) -0.25 * invrs * invrs;
 	Real invpirs = (Real) RSQRTPI * invrs;
 	Real inv2rs = (Real) 0.5 * invrs;
 	Real rc = constants->CUTOFF_SCALE;
