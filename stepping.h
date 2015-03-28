@@ -16,6 +16,9 @@ typedef struct {
     double  boxsize;
 } Stepping;
 
+
+void kick1_pm(Stepping *st, System *sys);
+void kick2_pm(Stepping *st, System *sys);
 void kick1_system(Stepping *st, System *sys);
 void kick2_system(Stepping *st, System *sys);
 void draft_system(Stepping *st, System *sys);

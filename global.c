@@ -18,7 +18,7 @@ void* xmalloc(size_t memo_size, int err_num)
     void *p;
     p =malloc(memo_size);
     if (!p) {
-        LOG_INFOL(LOG_FATAL, " Allocate error [ %d ] ! \n", err_num );
+        LOG_INFOL(LOG_FATAL, " Allocate error %ld [ %d ] ! \n", memo_size, err_num );
         system_exit(0);
     }
     return p;
@@ -29,7 +29,7 @@ void* xrealloc(void *mem, size_t memo_size, int err_num)
     void *p;
     p =realloc(mem, memo_size);
     if (!p) {
-        LOG_INFOL(LOG_FATAL, " Re-allocate error [ %d ] ! \n", err_num );
+        LOG_INFOL(LOG_FATAL, " Re-allocate error %ld [ %d ] ! \n", memo_size, err_num );
         system_exit(0);
     }
     return p;
@@ -40,7 +40,7 @@ void* xmemalign(size_t memo_size, int err_num)
     void *p;
     p = memalign(ALIGNCNT, memo_size);
     if (!p) {
-        LOG_INFOL(LOG_FATAL, " Aligned allocate error [ %d ] ! \n", err_num );
+        LOG_INFOL(LOG_FATAL, " Aligned allocate error %ld [ %d ] ! \n", memo_size, err_num );
         system_exit(0);
     }
     return p;

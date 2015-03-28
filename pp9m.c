@@ -113,11 +113,11 @@ int main(int argc, char *argv[])
     tstart = dtime();
     
 #pragma omp parallel for schedule(static) private(dx, dy, dz, dr2, dr3)
-    for ( n=0; n<nPart; n++ ) {
+    for ( n=0; n<la; n++ ) {
 		Real accx = 0.0;
 		Real accy = 0.0;
 		Real accz = 0.0;
-        for ( m=0; m<nPart; m++) {
+        for ( m=0; m<lb; m++) {
             dx = part.pos.x[m] -  part.pos.x[n];
             dy = part.pos.y[m] -  part.pos.y[n];
             dz = part.pos.z[m] -  part.pos.z[n];
@@ -140,9 +140,10 @@ int main(int argc, char *argv[])
     printf("dtime = %lf \n", ttime);
     
 	fp = fopen("ppn.acc", "w+");
+	double G1=43007.1;
 	for (n=0; n<nPart; n++)
 	{
-		fprintf(fp, "%d  %f  %f  %f\n", n+1, part.acc.x[n], part.acc.y[n], part.acc.z[n]);
+		fprintf(fp, "%d  %f  %f  %f\n", n+1, part.acc.x[n]*G1, part.acc.y[n]*G1, part.acc.z[n]*G1);
 		part.acc.x[n] = 0;
 		part.acc.y[n] = 0;
 		part.acc.z[n] = 0;

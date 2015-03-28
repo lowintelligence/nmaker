@@ -1,5 +1,5 @@
 ---------------------------------
-Updated on January 30, 2015.
+Updated on March 28, 2015.
 ---------------------------------
 I. Offload:
 	[Done] 1. Host load balancing. ***
@@ -18,19 +18,21 @@ II. Performance:
 III. Runtime:
 	[Ignore] 1. Thread task model optimization, TEAM+MASTER+SLAVE is OK? **
 	2. Thread running model optimization, using thread pool?
-	3. PM calcultion overlapped in Tree+PP.
+	[Almost done] 3. PM calcultion overlapped in Tree+PP.
+	4. A new load balance framework to deal with the clustered particles is needed. ***
 
 IV. Correctness:
 	[Done] 1. PM calculation failed when bigger than 16 procs. **
 	[Give up] 2. Why we need sleep 2 seconds before ppkernel in slave thread? ***
 	[Done] 3. Copy the data back to the host. ***
 	[Done] 4. Integrate the time stepping procedure.
-	5. Test a real case and check the correctness. ***
+	[On going] 5. Test a real case and check the correctness. ***
 	[Half Done] 6. Correct the potetial >2G integer bugs to guarantee the running for more than 2048^3 particles. ***
 	[Done] 7. Check the Tree+PP calculation with the result of pure PP. ***
+	8. Illegal numbers while PM runs overlapped with tree. ***
 
 V. Code style:
 	[Done] 1. Rewrite and check the code with new data definition. ***
-	[Almost done]2. Eliminate unnessesary duplicated varibles and the arrays no need to keep-in-house. **
+	[Almost done] 2. Eliminate unnessesary duplicated varibles and the arrays no need to keep-in-house. **
 	3. Build the code with delivering tools like automake. *
 

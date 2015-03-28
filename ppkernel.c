@@ -160,6 +160,139 @@ int get_block_tid(int bid)
 #endif
 }
 
+#define __FUNC_CONCAT(x, y) x##y
+#define __PP_SUB_SQ(a, b, c) (a*a + b*b + c*c)
+#define __PP_CUBIC(a) (a * a * a)
+
+#ifdef NMK_SINGLE_PREC
+#define	__PP_RSQRT(a) ((Real) 1.0) / SQRT(__PP_CUBIC(a))
+#else
+#define __PP_RSQRT(a)	INVSQRT(__PP_CUBIC(a))
+#endif // NMK_SINGLE_PREC
+
+#define _PP_SUB(_d, _dnum, _didx) \
+	dx##_dnum = _d.x[_didx] - x2; \
+	dy##_dnum = _d.y[_didx] - y2; \
+	dz##_dnum = _d.z[_didx] - z2;
+
+#define _PP_SUB_REV(_d, _dnum, _didx) \
+	dx##_dnum = x2 - _d.x[_didx]; \
+	dy##_dnum = y2 - _d.y[_didx]; \
+	dz##_dnum = z2 - _d.z[_didx];
+
+#define PP_SUB_U1(_d, _didx) \
+	_PP_SUB(_d, 1, _didx)
+
+#define PP_SUB_U2(_d, _didx) \
+	_PP_SUB(_d, 1, _didx) \
+	_PP_SUB(_d, 2, _didx+N_CACHE/UNROLL)
+
+#define PP_SUB_U4(_d, _didx) \
+	_PP_SUB(_d, 1, _didx) \
+	_PP_SUB(_d, 2, _didx+N_CACHE/UNROLL) \
+	_PP_SUB(_d, 3, _didx+2*N_CACHE/UNROLL) \
+	_PP_SUB(_d, 4, _didx+3*N_CACHE/UNROLL)
+
+#define PP_SUB_REV(_d, _didx) \
+	_PP_SUB_REV(_d, 1, _didx)
+
+#define PP_SUB(_u) __FUNC_CONCAT(PP_SUB_U, _u)
+#define PP_SUB_NOUNROLL PP_SUB(1)
+#define PP_SUB_UNROLL PP_SUB(UNROLL)
+
+#define _PP_DISTANCE_N(_dnum) \
+	dr2##_dnum = eps2 + __PP_SUB_SQ(dx##_dnum, dy##_dnum, dz##_dnum);
+
+#define _PP_DISTANCE_F(_dnum) \
+	dd##_dnum = __PP_SUB_SQ(dx##_dnum, dy##_dnum, dz##_dnum); \
+	dr##_dnum = SQRT(dd##_dnum); \
+	dg##_dnum = ERFC(dr##_dnum*inv2rs) + dr##_dnum*invpirs*EXP(dd##_dnum*invrs2); \
+	dr2##_dnum = eps2+dd##_dnum;
+//	dd##_dnum = __PP_SUB_SQ(dx##_dnum, dy##_dnum, dz##_dnum); \
+//	dr2##_dnum = (Real) 1.0/SQRT(eps2+dd##_dnum); \
+//	dr##_dnum = (Real) 1.0/dr2##_dnum; \
+//	dg##_dnum = ERFC(dr##_dnum*inv2rs) + dr##_dnum*invpirs*EXP(dd##_dnum*invrs2); 
+
+#define _PP_DISTANCE_T(_dnum) \
+	dd##_dnum = __PP_SUB_SQ(dx##_dnum, dy##_dnum, dz##_dnum); \
+	dr##_dnum = SQRT(dd##_dnum); 
+
+#define _PP_BM_0(_dm, _midx, _exp) _exp
+#define _PP_BM_1(_dm, _midx, _exp) _dm[_midx] * (_exp)
+
+#define _PP_GRAV_N(_dnum, _m, _dm, _midx) \
+	dr3##_dnum = _PP_BM_##_m(_dm, _midx, __PP_RSQRT(dr2##_dnum));
+
+#define _PP_GRAV_F(_dnum, _m, _dm, _midx) \
+	dr3##_dnum = _PP_BM_##_m(_dm, _midx, dg##_dnum * __PP_RSQRT(dr2##_dnum));
+
+#define _PP_GRAV_T(_dnum, _m, _dm, _midx) \
+	idx##_dnum = (int)(rad2idx * dr##_dnum); \
+	dr3##_dnum = (idx##_dnum<TABLEN) ? _PP_BM_##_m(_dm, _midx, val[idx##_dnum] + ( dr##_dnum - dlt * idx##_dnum ) * slp[idx##_dnum]) : 0 ;
+
+#ifdef NMK_NAIVE_GRAVITY
+	#define _PP_DISTANCE _PP_DISTANCE_N
+	#define _PP_GRAV _PP_GRAV_N
+#else // NMK_NAIVE_GRAVITY
+#ifdef NMK_PP_TAB
+	#define _PP_DISTANCE _PP_DISTANCE_T
+	#define _PP_GRAV _PP_GRAV_T
+#else // NMK_PP_TAB
+	#define _PP_DISTANCE _PP_DISTANCE_F
+	#define _PP_GRAV _PP_GRAV_F
+#endif // NMK_PP_TAB
+#endif // NMK_NAIVE_GRAVITY
+
+#define PP_COE_U1(_m, _dm, _midx) \
+	_PP_DISTANCE(1) \
+	_PP_GRAV(1, _m, _dm, _midx)
+
+#define PP_COE_U2(_m, _dm, _midx) \
+	_PP_DISTANCE(1) \
+	_PP_DISTANCE(2) \
+	_PP_GRAV(1, _m, _dm, _midx) \
+	_PP_GRAV(2, _m, _dm, _midx+N_CACHE/UNROLL)
+
+#define PP_COE_U4(_m, _dm, _midx) \
+	_PP_DISTANCE(1) \
+	_PP_DISTANCE(2) \
+	_PP_DISTANCE(3) \
+	_PP_DISTANCE(4) \
+	_PP_GRAV(1, _m, _dm, _midx) \
+	_PP_GRAV(2, _m, _dm, _midx+N_CACHE/UNROLL) \
+	_PP_GRAV(3, _m, _dm, _midx+2*N_CACHE/UNROLL) \
+	_PP_GRAV(4, _m, _dm, _midx+3*N_CACHE/UNROLL)
+	
+#define PP_COE(_u) __FUNC_CONCAT(PP_COE_U, _u)
+#define PP_COE_NOUNROLL PP_COE(1)
+#define PP_COE_UNROLL PP_COE(UNROLL)
+
+#define _PP_ACC_U1(_v) _v##1*dr31
+#define _PP_ACC_U2(_v) _v##1*dr31 + _v##2*dr32
+#define _PP_ACC_U4(_v) _v##1*dr31 + _v##2*dr32 + _v##3*dr33 + _v##4*dr34
+
+#define _PP_ACC_REV(_d, _didx) \
+	_d.x[_didx] += _PP_ACC_U1(dx); \
+	_d.y[_didx] += _PP_ACC_U1(dy); \
+	_d.z[_didx] += _PP_ACC_U1(dz); 
+
+#define PP_ACC_REV _PP_ACC_REV
+
+#define _PP_ACC(_u) __FUNC_CONCAT(_PP_ACC_U, _u)
+
+#define PP_ACC_NOUNROLL \
+	ax2 += _PP_ACC(1)(dx); \
+	ay2 += _PP_ACC(1)(dy); \
+	az2 += _PP_ACC(1)(dz); 
+
+#define PP_ACC_UNROLL \
+	ax2 += _PP_ACC(UNROLL)(dx); \
+	ay2 += _PP_ACC(UNROLL)(dy); \
+	az2 += _PP_ACC(UNROLL)(dz); 
+
+
+
+
 #ifdef __MULTI_THREAD_
 int ppkernel(Array3 A, int la, Array3 B, int lb, Real eps2, Array3 C)
 #else
@@ -170,7 +303,7 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 
 #ifndef __MULTI_THREAD_
 #ifdef NMK_PP_TAB
-	int idx;
+	int idx1, idx2, idx3, idx4;
 	Real dlt  = constants->delta;
 	Real *val = constants->value;
 	Real *slp = constants->slope;
@@ -226,54 +359,6 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 		Real dx2, dy2, dz2, dd2, dg2, dr2, dr22, dr32;
 		Real dx3, dy3, dz3, dd3, dg3, dr3, dr23, dr33;
 		Real dx4, dy4, dz4, dd4, dg4, dr4, dr24, dr34;
-
-//#ifdef TABLEN
-//		int idx;
-//		Real dlt  = constants->delta;
-//		Real *val = constants->value;
-//		Real *slp = constants->slope;
-//		Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
-//
-//		int pern = la/tnum;
-//		int modn = la%tnum;
-//		int tpass = modn-tid;
-//		int tex = (tnum+tpass-1)/tnum;
-//		int ns = tid*pern+(modn-tex*tpass);
-//		int nt = ns + pern + tex;
-//
-//		for ( j=ns; j<nt; j++ )
-//		{
-//			ax2=0;
-//			ay2=0;
-//			az2=0;
-//
-//			for ( m=0; m<lb; m++)
-//			{
-//				dx1 = B.x[m] -  A.x[j];
-//				dy1 = B.y[m] -  A.y[j];
-//				dz1 = B.z[m] -  A.z[j];
-//
-//				dr21 = SQRT(dx1*dx1 + dy1*dy1 + dz1*dz1);
-//				idx = (int)(rad2idx*dr21);
-//				dr31 = (idx<TABLEN) ? val[idx] + ( dr21 - dlt * idx ) * slp[idx] : 0;
-////				if (idx<TABLEN)
-////				{
-////					dr31 = val[idx] + ( dr21 - dlt * idx ) * slp[idx];
-////				}
-////				else
-////				{
-////					dr31 = 0;
-////				}
-//
-//				ax2 += dx1*dr31 ;
-//				ay2 += dy1*dr31 ;
-//				az2 += dz1*dr31 ;
-//			}
-//			C.x[j] += ax2;
-//			C.y[j] += ay2;
-//			C.z[j] += az2;
-//		}
-//#else // TABLEN
 
 #ifdef __MULTI_THREAD_
 		int tid, tnum;
@@ -336,39 +421,11 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B.x[k] - x2;
-								dy1 = B.y[k] - y2;
-								dz1 = B.z[k] - z2;
+								PP_SUB_NOUNROLL(B, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-								dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-								dr31 = INVSQRT(dr21 * dr21 * dr21);
-#endif
+								PP_COE_NOUNROLL(0, Bm, k) ;
 
-#else // NMK_NAIVE_GRAVITY
-								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-								dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-								idx = (int)(rad2idx * dr1);
-								dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
-#else // NMK_PP_TAB
-								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-								dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-								dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-								dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-								ax2 += dx1*dr31 ;
-								ay2 += dy1*dr31 ;
-								az2 += dz1*dr31 ;
+								PP_ACC_NOUNROLL ;
 							}
 
 							C.x[j] += ax2;
@@ -399,145 +456,11 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B.x[k] - x2;
-								dy1 = B.y[k] - y2;
-								dz1 = B.z[k] - z2;
-#if (UNROLL > 1)
-								dx2 = B.x[k+N_CACHE/UNROLL] - x2;
-								dy2 = B.y[k+N_CACHE/UNROLL] - y2;
-								dz2 = B.z[k+N_CACHE/UNROLL] - z2;
-#if (UNROLL >= 4)
-								dx3 = B.x[k+2*N_CACHE/UNROLL] - x2;
-								dy3 = B.y[k+2*N_CACHE/UNROLL] - y2;
-								dz3 = B.z[k+2*N_CACHE/UNROLL] - z2;
+								PP_SUB_UNROLL(B, k) ;
 
-								dx4 = B.x[k+3*N_CACHE/UNROLL] - x2;
-								dy4 = B.y[k+3*N_CACHE/UNROLL] - y2;
-								dz4 = B.z[k+3*N_CACHE/UNROLL] - z2;
-#endif				
-#endif
+								PP_COE_UNROLL(0, Bm, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#if (UNROLL > 1)                                     
-								dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
-			//					dr21 = invsqrtf(eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1);
-			//					dr22 = invsqrtf(eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2);
-#if (UNROLL >= 4)
-								dr23 = eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3;
-								dr24 = eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4;
-			//					dr23 = invsqrtf(eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3);
-			//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
-#endif
-#endif
-#ifdef NMK_SINGLE_PREC
-								dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                                                  
-								dr32 = ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                 
-								dr33 = ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
-																			  
-								dr34 = ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#else
-								dr31 = INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)
-								dr32 = INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)
-								dr33 = INVSQRT(dr23 * dr23 * dr23);
-
-								dr34 = INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif
-
-#else // NMK_NAIVE_GRAVITY
-								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-								dr1 = SQRT(dd1);
-#if (UNROLL > 1)
-								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
-								dr2 = SQRT(dd2);
-#if (UNROLL >=4)
-								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
-								dr3 = SQRT(dd3);
-
-								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
-								dr4 = SQRT(dd4);
-#endif
-#endif
-
-#ifdef NMK_PP_TAB
-								idx = (int)(rad2idx * dr1);
-								dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
-#if (UNROLL > 1)
-								idx = (int)(rad2idx * dr2);
-								dr32 = (idx<TABLEN) ? val[idx] + ( dr2 - dlt * idx ) * slp[idx] : 0;
-#if (UNROLL >=4)
-								idx = (int)(rad2idx * dr3);
-								dr33 = (idx<TABLEN) ? val[idx] + ( dr3 - dlt * idx ) * slp[idx] : 0;
-
-								idx = (int)(rad2idx * dr4);
-								dr34 = (idx<TABLEN) ? val[idx] + ( dr4 - dlt * idx ) * slp[idx] : 0;
-#endif
-#endif
-
-#else // NMK_PP_TAB
-
-								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-								dr21 = eps2+dd1;
-#if (UNROLL > 1)
-								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-								dr22 = eps2+dd2;
-#if (UNROLL >=4)
-								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-								dr23 = eps2+dd3;
-
-								dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
-								dr24 = eps2+dd4;
-#endif
-#endif
-
-#ifdef NMK_SINGLE_PREC
-								dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                                                        
-								dr32 = dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                       
-								dr33 = dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
-									          									  
-								dr34 = dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#else // NMK_SINGLE_PREC
-								dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                             
-								dr32 = dg2 * INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                            
-								dr33 = dg3 * INVSQRT(dr23 * dr23 * dr23);
-                                             
-								dr34 = dg4 * INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif // NMK_SINGLE_PREC
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-#if (UNROLL == 4)
-								ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
-								ay2 += dy1*dr31 + dy2*dr32 + dy3*dr33 + dy4*dr34;
-								az2 += dz1*dr31 + dz2*dr32 + dz3*dr33 + dz4*dr34;
-#endif
-#if (UNROLL == 2) 
-								ax2 += dx1*dr31 + dx2*dr32;
-								ay2 += dy1*dr31 + dy2*dr32;
-								az2 += dz1*dr31 + dz2*dr32;
-#endif
-#if (UNROLL == 1)
-								ax2 += dx1*dr31 ;
-								ay2 += dy1*dr31 ;
-								az2 += dz1*dr31 ;
-#endif
+								PP_ACC_UNROLL ;
 							}
 
 							C.x[j] += ax2;
@@ -590,39 +513,11 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B.x[k] - x2;
-							dy1 = B.y[k] - y2;
-							dz1 = B.z[k] - z2;
+							PP_SUB_NOUNROLL(B, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-							dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-							dr31 = INVSQRT(dr21 * dr21 * dr21);
-#endif
+							PP_COE_NOUNROLL(0, Bm, k) ;
 
-#else // NMK_NAIVE_GRAVITY
-							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-							dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-							idx = (int)(rad2idx * dr1);
-							dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
-#else // NMK_PP_TAB
-							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-							dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-							dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-							dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-							ax2 += dx1*dr31 ;
-							ay2 += dy1*dr31 ;
-							az2 += dz1*dr31 ;
+							PP_ACC_NOUNROLL ;
 						}
 					}
 					else // Unrolling
@@ -635,144 +530,11 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B.x[k] - x2;
-							dy1 = B.y[k] - y2;
-							dz1 = B.z[k] - z2;
-#if (UNROLL > 1)
-							dx2 = B.x[k+N_CACHE/UNROLL] - x2;
-							dy2 = B.y[k+N_CACHE/UNROLL] - y2;
-							dz2 = B.z[k+N_CACHE/UNROLL] - z2;
-#if (UNROLL >= 4)
-							dx3 = B.x[k+2*N_CACHE/UNROLL] - x2;
-							dy3 = B.y[k+2*N_CACHE/UNROLL] - y2;
-							dz3 = B.z[k+2*N_CACHE/UNROLL] - z2;
+							PP_SUB_UNROLL(B, k) ;
 
-							dx4 = B.x[k+3*N_CACHE/UNROLL] - x2;
-							dy4 = B.y[k+3*N_CACHE/UNROLL] - y2;
-							dz4 = B.z[k+3*N_CACHE/UNROLL] - z2;
-#endif				
-#endif
+							PP_COE_UNROLL(0, Bm, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#if (UNROLL > 1)                                     
-							dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
-		//					dr21 = invsqrtf(eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1);
-		//					dr22 = invsqrtf(eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2);
-#if (UNROLL >= 4)
-							dr23 = eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3;
-							dr24 = eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4;
-		//					dr23 = invsqrtf(eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3);
-		//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
-#endif
-#endif
-#ifdef NMK_SINGLE_PREC
-							dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                                                  
-							dr32 = ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                 
-							dr33 = ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
-																		  
-							dr34 = ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#else
-							dr31 = INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)
-							dr32 = INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)
-							dr33 = INVSQRT(dr23 * dr23 * dr23);
-
-							dr34 = INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif
-
-#else // NMK_NAIVE_GRAVITY
-							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-							dr1 = SQRT(dd1);
-#if (UNROLL > 1)
-							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
-							dr2 = SQRT(dd2);
-#if (UNROLL >=4)
-							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
-							dr3 = SQRT(dd3);
-
-							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
-							dr4 = SQRT(dd4);
-#endif
-#endif
-
-#ifdef NMK_PP_TAB
-							idx = (int)(rad2idx * dr1);
-							dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
-#if (UNROLL > 1)
-							idx = (int)(rad2idx * dr2);
-							dr32 = (idx<TABLEN) ? val[idx] + ( dr2 - dlt * idx ) * slp[idx] : 0;
-#if (UNROLL >=4)
-							idx = (int)(rad2idx * dr3);
-							dr33 = (idx<TABLEN) ? val[idx] + ( dr3 - dlt * idx ) * slp[idx] : 0;
-
-							idx = (int)(rad2idx * dr4);
-							dr34 = (idx<TABLEN) ? val[idx] + ( dr4 - dlt * idx ) * slp[idx] : 0;
-#endif
-#endif
-
-#else // NMK_PP_TAB
-							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-							dr21 = eps2+dd1;
-#if (UNROLL > 1)
-							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-							dr22 = eps2+dd2;
-#if (UNROLL >=4)
-							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-							dr23 = eps2+dd3;
-
-							dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
-							dr24 = eps2+dd4;
-#endif
-#endif
-
-#ifdef NMK_SINGLE_PREC
-							dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                                                        
-							dr32 = dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                       
-							dr33 = dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
-
-							dr34 = dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#else // NMK_SINGLE_PREC
-							dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                             
-							dr32 = dg2 * INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                            
-							dr33 = dg3 * INVSQRT(dr23 * dr23 * dr23);
-
-							dr34 = dg4 * INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif // NMK_SINGLE_PREC
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-#if (UNROLL == 4)
-							ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
-							ay2 += dy1*dr31 + dy2*dr32 + dy3*dr33 + dy4*dr34;
-							az2 += dz1*dr31 + dz2*dr32 + dz3*dr33 + dz4*dr34;
-#endif
-#if (UNROLL == 2) 
-							ax2 += dx1*dr31 + dx2*dr32;
-							ay2 += dy1*dr31 + dy2*dr32;
-							az2 += dz1*dr31 + dz2*dr32;
-#endif
-#if (UNROLL == 1)
-							ax2 += dx1*dr31 ;
-							ay2 += dy1*dr31 ;
-							az2 += dz1*dr31 ;
-#endif
+							PP_ACC_UNROLL ;
 						}
 					}
 
@@ -804,39 +566,11 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 #pragma ivdep
 				for (k=ns; k<nt; k++)
 				{
-					dx1 = x2 - A.x[k];
-					dy1 = y2 - A.y[k];
-					dz1 = z2 - A.z[k];
+					PP_SUB_REV(A, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-					dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-					dr31 = INVSQRT(dr21 * dr21 * dr21);
-#endif
+					PP_COE_UNROLL(0, Bm, m) ;
 
-#else // NMK_NAIVE_GRAVITY
-					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-					dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-					idx = (int)(rad2idx * dr1);
-					dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
-#else // NMK_PP_TAB
-					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-					dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-					dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-					dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-					C.x[k] += dx1*dr31 ;
-					C.y[k] += dy1*dr31 ;
-					C.z[k] += dz1*dr31 ;
+					PP_ACC_REV(C, k) ;
 				}
 			}
 		}
@@ -861,46 +595,18 @@ int ppkernel(Array3 A, int la, Array3 B, int lb, Constants *constants, Array3 C,
 
 			for (k=0; k<lb; k++)
 			{
-				dx1 = B.x[k] - x2;
-				dy1 = B.y[k] - y2;
-				dz1 = B.z[k] - z2;
+				PP_SUB_NOUNROLL(B, k) ;
+				
+				PP_COE_NOUNROLL(0, Bm, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-				dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-				dr31 = ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-				dr31 = INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#else // NMK_NAIVE_GRAVITY
-				dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-				dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-				idx = (int)(rad2idx * dr1);
-				dr31 = (idx<TABLEN) ? val[idx] + ( dr1 - dlt * idx ) * slp[idx] : 0;
-#else // NMK_PP_TAB
-				dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-				dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-				dr31 = dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-				dr31 = dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-				ax2 += dx1*dr31 ;
-				ay2 += dy1*dr31 ;
-				az2 += dz1*dr31 ;
+				PP_ACC_NOUNROLL ;
 			}
+
 			C.x[j] += ax2;
 			C.y[j] += ay2;
 			C.z[j] += az2;
 		}
 #endif // #if 1
-//#endif // TABLEN
 	}
 #ifdef __MULTI_THREAD_
     tstop = dtime();
@@ -920,7 +626,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 
 #ifndef __MULTI_THREAD_
 #ifdef NMK_PP_TAB
-	int idx;
+	int idx1, idx2, idx3, idx4;
 	Real dlt  = constants->delta;
 	Real *val = constants->value;
 	Real *slp = constants->slope;
@@ -977,61 +683,13 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 		Real dx3, dy3, dz3, dd3, dg3, dr3, dr23, dr33;
 		Real dx4, dy4, dz4, dd4, dg4, dr4, dr24, dr34;
 
-//#ifdef TABLEN
-//		int idx;
-//		Real dlt  = constants->delta;
-//		Real *val = constants->value;
-//		Real *slp = constants->slope;
-//		Real rad2idx = TABLEN/(constants->CUTOFF_SCALE);
-//
-//		int pern = la/tnum;
-//		int modn = la%tnum;
-//		int tpass = modn-tid;
-//		int tex = (tnum+tpass-1)/tnum;
-//		int ns = tid*pern+(modn-tex*tpass);
-//		int nt = ns + pern + tex;
-//
-//		for ( j=ns; j<nt; j++ )
-//		{
-//			ax2=0;
-//			ay2=0;
-//			az2=0;
-//
-//			for ( m=0; m<lb; m++)
-//			{
-//				dx1 = B.x[m] -  A.x[j];
-//				dy1 = B.y[m] -  A.y[j];
-//				dz1 = B.z[m] -  A.z[j];
-//
-//				dr21 = SQRT(dx1*dx1 + dy1*dy1 + dz1*dz1);
-//				idx = (int)(rad2idx*dr21);
-//				dr31 = (idx<TABLEN) ? Bm[m] * (val[idx] + ( dr21 - dlt * idx ) * slp[idx]) : 0;
-////				if (idx<TABLEN)
-////				{
-////					dr31 = Bm[m] * (val[idx] + ( dr21 - dlt * idx ) * slp[idx]);
-////				}
-////				else
-////				{
-////					dr31 = 0;
-////				}
-//
-//				ax2 += dx1*dr31 ;
-//				ay2 += dy1*dr31 ;
-//				az2 += dz1*dr31 ;
-//			}
-//			C.x[j] += ax2;
-//			C.y[j] += ay2;
-//			C.z[j] += az2;
-//		}
-//#else // TABLEN
-
 #ifdef __MULTI_THREAD_
 		int tid, tnum;
 		tid = get_block_tid(0);
 		tnum = get_block_tnum(0);
 #endif
 
-#if 1 // Set 0 to debug
+#if 1 // Set 0 to debug	
 		nb = (la+CLCNT-1)/CLCNT;
 		mb = (lb+N_CACHE-1)/N_CACHE;
 
@@ -1049,12 +707,11 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 			int nbt = nbs + pernb + tex;
 //			printf ("Thread[%d]: nbs = %d, nbt = %d.\n", tid, nbs, nbt);
 
-			for ( n=nbs; n<nbt; n++ )
-			{
+			for ( n=nbs; n<nbt; n++ ) {
+
 				int nt = (n==nb-1) ? la : (n+1)*CLCNT;
 
-				for (m=0; m<mb; m++)
-				{
+				for (m=0; m<mb; m++) {
 #ifdef __MULTI_THREAD_
 					mt = ((m+tid)%mb)*N_CACHE + (((m+tid)%mb==mb-1 && lb%N_CACHE) ? lb-(mb-1)*N_CACHE : N_CACHE/UNROLL);
 #else
@@ -1063,7 +720,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 
 					if ( mt == lb ) // No unrolling at the last B block
 					{
-//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, (mb-1)*N_CACHE, mt);
+//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, ((m+tid)%mb)*N_CACHE, mt);
 //#pragma prefetch A.x:1:CLCNT
 //#pragma prefetch A.y:1:CLCNT
 //#pragma prefetch A.z:1:CLCNT
@@ -1077,47 +734,19 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 							ay2=0;
 							az2=0;
 
-#pragma vector aligned
 #pragma ivdep
+#pragma vector aligned
 #ifdef __MULTI_THREAD_
 							for (k=((m+tid)%mb)*N_CACHE; k<mt; k++)
 #else
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B.x[k] - x2;
-								dy1 = B.y[k] - y2;
-								dz1 = B.z[k] - z2;
+								PP_SUB_NOUNROLL(B, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-								dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
-#else
-								dr31 = Bm[k] * INVSQRT(dr21 * dr21 * dr21);
-#endif
+								PP_COE_NOUNROLL(1, Bm, k) ;
 
-#else // NMK_NAIVE_GRAVITY
-								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-								dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-								idx = (int)(rad2idx * dr1);
-								dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
-#else // NMK_PP_TAB
-								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-								dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-								dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-								dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-								ax2 += dx1*dr31 ;
-								ay2 += dy1*dr31 ;
-								az2 += dz1*dr31 ;
+								PP_ACC_NOUNROLL ;
 							}
 
 							C.x[j] += ax2;
@@ -1127,7 +756,6 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 					}
 					else // Unrolling the loop
 					{
-//						printf ("Thread[%d]: ms = %d, mt = %d.\n", tid, m*N_CACHE, mt);
 //#pragma prefetch A.x:1:CLCNT
 //#pragma prefetch A.y:1:CLCNT
 //#pragma prefetch A.z:1:CLCNT
@@ -1149,144 +777,11 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 							for (k=m*N_CACHE; k<mt; k++)
 #endif
 							{
-								dx1 = B.x[k] - x2;
-								dy1 = B.y[k] - y2;
-								dz1 = B.z[k] - z2;
-#if (UNROLL > 1)
-								dx2 = B.x[k+N_CACHE/UNROLL] - x2;
-								dy2 = B.y[k+N_CACHE/UNROLL] - y2;
-								dz2 = B.z[k+N_CACHE/UNROLL] - z2;
-#if (UNROLL >= 4)
-								dx3 = B.x[k+2*N_CACHE/UNROLL] - x2;
-								dy3 = B.y[k+2*N_CACHE/UNROLL] - y2;
-								dz3 = B.z[k+2*N_CACHE/UNROLL] - z2;
+								PP_SUB_UNROLL(B, k) ;
 
-								dx4 = B.x[k+3*N_CACHE/UNROLL] - x2;
-								dy4 = B.y[k+3*N_CACHE/UNROLL] - y2;
-								dz4 = B.z[k+3*N_CACHE/UNROLL] - z2;
-#endif				
-#endif
+								PP_COE_UNROLL(1, Bm, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-								dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#if (UNROLL > 1)                                     
-								dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
-			//					dr21 = invsqrtf(eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1);
-			//					dr22 = invsqrtf(eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2);
-#if (UNROLL >= 4)
-								dr23 = eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3;
-								dr24 = eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4;
-			//					dr23 = invsqrtf(eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3);
-			//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
-#endif
-#endif
-#ifdef NMK_SINGLE_PREC
-								dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
-#if (UNROLL > 1)                                                  
-								dr32 = Bm[k+N_CACHE/UNROLL] * (((Real) 1.0) / SQRT(dr22 * dr22 * dr22));
-#if (UNROLL >= 4)                                                 
-								dr33 = Bm[k+2*N_CACHE/UNROLL] * (((Real) 1.0) / SQRT(dr23 * dr23 * dr23));
-																			  
-								dr34 = Bm[k+3*N_CACHE/UNROLL] * (((Real) 1.0) / SQRT(dr24 * dr24 * dr24));
-#endif
-#endif
-#else
-								dr31 = Bm[k] * INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)
-								dr32 = Bm[k+N_CACHE/UNROLL] * INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)
-								dr33 = Bm[k+2*N_CACHE/UNROLL] * INVSQRT(dr23 * dr23 * dr23);
-
-								dr34 = Bm[k+3*N_CACHE/UNROLL] * INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif
-
-#else // NMK_NAIVE_GRAVITY
-								dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-								dr1 = SQRT(dd1);
-#if (UNROLL > 1)
-								dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
-								dr2 = SQRT(dd2);
-#if (UNROLL >=4)
-								dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
-								dr3 = SQRT(dd3);
-
-								dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
-								dr4 = SQRT(dd4);
-#endif
-#endif
-
-#ifdef NMK_PP_TAB
-								idx = (int)(rad2idx * dr1);
-								dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
-#if (UNROLL > 1)
-								idx = (int)(rad2idx * dr2);
-								dr32 = (idx<TABLEN) ? Bm[k+N_CACHE/UNROLL] * (val[idx] + ( dr2 - dlt * idx ) * slp[idx]) : 0;
-#if (UNROLL >=4)
-								idx = (int)(rad2idx * dr3);
-								dr33 = (idx<TABLEN) ? Bm[k+2*N_CACHE/UNROLL] * (val[idx] + ( dr3 - dlt * idx ) * slp[idx]) : 0;
-
-								idx = (int)(rad2idx * dr4);
-								dr34 = (idx<TABLEN) ? Bm[k+3*N_CACHE/UNROLL] * (val[idx] + ( dr4 - dlt * idx ) * slp[idx]) : 0;
-#endif
-#endif
-
-#else // NMK_PP_TAB
-								dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-								dr21 = eps2+dd1;
-#if (UNROLL > 1)
-								dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-								dr22 = eps2+dd2;
-#if (UNROLL >=4)
-								dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-								dr23 = eps2+dd3;
-
-								dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
-								dr24 = eps2+dd4;
-#endif
-#endif
-
-#ifdef NMK_SINGLE_PREC
-								dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                                                        
-								dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                                             
-								dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
-									                                									  
-								dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#else // NMK_SINGLE_PREC
-								dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                             
-								dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                  
-								dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * INVSQRT(dr23 * dr23 * dr23);
-                                                                   
-								dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif // NMK_SINGLE_PREC
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-#if (UNROLL == 4)
-								ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
-								ay2 += dy1*dr31 + dy2*dr32 + dy3*dr33 + dy4*dr34;
-								az2 += dz1*dr31 + dz2*dr32 + dz3*dr33 + dz4*dr34;
-#endif
-#if (UNROLL == 2) 
-								ax2 += dx1*dr31 + dx2*dr32;
-								ay2 += dy1*dr31 + dy2*dr32;
-								az2 += dz1*dr31 + dz2*dr32;
-#endif
-#if (UNROLL == 1)
-								ax2 += dx1*dr31 ;
-								ay2 += dy1*dr31 ;
-								az2 += dz1*dr31 ;
-#endif
+								PP_ACC_UNROLL ;
 							}
 
 							C.x[j] += ax2;
@@ -1339,39 +834,11 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B.x[k] - x2;
-							dy1 = B.y[k] - y2;
-							dz1 = B.z[k] - z2;
+							PP_SUB_NOUNROLL(B, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-							dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
-#else
-							dr31 = Bm[k] * (INVSQRT(dr21 * dr21 * dr21));
-#endif
+							PP_COE_NOUNROLL(1, Bm, k) ;
 
-#else // NMK_NAIVE_GRAVITY
-							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-							dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-							idx = (int)(rad2idx * dr1);
-							dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
-#else // NMK_PP_TAB
-							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-							dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-							dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-							dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-							ax2 += dx1*dr31 ;
-							ay2 += dy1*dr31 ;
-							az2 += dz1*dr31 ;
+							PP_ACC_NOUNROLL ;
 						}
 					}
 					else // Unrolling
@@ -1384,144 +851,11 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 						for (k=m*N_CACHE; k<mt; k++)
 #endif
 						{
-							dx1 = B.x[k] - x2;
-							dy1 = B.y[k] - y2;
-							dz1 = B.z[k] - z2;
-#if (UNROLL > 1)
-							dx2 = B.x[k+N_CACHE/UNROLL] - x2;
-							dy2 = B.y[k+N_CACHE/UNROLL] - y2;
-							dz2 = B.z[k+N_CACHE/UNROLL] - z2;
-#if (UNROLL >= 4)
-							dx3 = B.x[k+2*N_CACHE/UNROLL] - x2;
-							dy3 = B.y[k+2*N_CACHE/UNROLL] - y2;
-							dz3 = B.z[k+2*N_CACHE/UNROLL] - z2;
+							PP_SUB_UNROLL(B, k) ;
 
-							dx4 = B.x[k+3*N_CACHE/UNROLL] - x2;
-							dy4 = B.y[k+3*N_CACHE/UNROLL] - y2;
-							dz4 = B.z[k+3*N_CACHE/UNROLL] - z2;
-#endif				
-#endif
+							PP_COE_UNROLL(1, Bm, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-							dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#if (UNROLL > 1)                                     
-							dr22 = eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2;
-		//					dr21 = invsqrtf(eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1);
-		//					dr22 = invsqrtf(eps2 + dx2*dx2 + dy2*dy2 + dz2*dz2);
-#if (UNROLL >= 4)
-							dr23 = eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3;
-							dr24 = eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4;
-		//					dr23 = invsqrtf(eps2 + dx3*dx3 + dy3*dy3 + dz3*dz3);
-		//					dr24 = invsqrtf(eps2 + dx4*dx4 + dy4*dy4 + dz4*dz4);
-#endif
-#endif
-#ifdef NMK_SINGLE_PREC
-							dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
-#if (UNROLL > 1)                                                  
-							dr32 = Bm[k] * (((Real) 1.0) / SQRT(dr22 * dr22 * dr22));
-#if (UNROLL >= 4)                                                 
-							dr33 = Bm[k] * (((Real) 1.0) / SQRT(dr23 * dr23 * dr23));
-																		  
-							dr34 = Bm[k] * (((Real) 1.0) / SQRT(dr24 * dr24 * dr24));
-#endif
-#endif
-#else
-							dr31 = Bm[k] * INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                           
-							dr32 = Bm[k] * INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                          
-							dr33 = Bm[k] * INVSQRT(dr23 * dr23 * dr23);
-                                    	   
-							dr34 = Bm[k] * INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif
-
-#else // NMK_NAIVE_GRAVITY
-							dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-							dr1 = SQRT(dd1);
-#if (UNROLL > 1)
-							dd2 = dx2*dx2 + dy2*dy2 + dz2*dz2;
-							dr2 = SQRT(dd2);
-#if (UNROLL >=4)
-							dd3 = dx3*dx3 + dy3*dy3 + dz3*dz3;
-							dr3 = SQRT(dd3);
-
-							dd4 = dx4*dx4 + dy4*dy4 + dz4*dz4;
-							dr4 = SQRT(dd4);
-#endif
-#endif
-
-#ifdef NMK_PP_TAB
-							idx = (int)(rad2idx * dr1);
-							dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
-#if (UNROLL > 1)
-							idx = (int)(rad2idx * dr2);
-							dr32 = (idx<TABLEN) ? Bm[k+N_CACHE/UNROLL] * (val[idx] + ( dr2 - dlt * idx ) * slp[idx]) : 0;
-#if (UNROLL >=4)
-							idx = (int)(rad2idx * dr3);
-							dr33 = (idx<TABLEN) ? Bm[k+2*N_CACHE/UNROLL] * (val[idx] + ( dr3 - dlt * idx ) * slp[idx]) : 0;
-
-							idx = (int)(rad2idx * dr4);
-							dr34 = (idx<TABLEN) ? Bm[k+3*N_CACHE/UNROLL] * (val[idx] + ( dr4 - dlt * idx ) * slp[idx]) : 0;
-#endif
-#endif
-
-#else // NMK_PP_TAB
-							dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-							dr21 = eps2+dd1;
-#if (UNROLL > 1)
-							dg2 = ERFC(dr2*inv2rs) + dr2*invpirs*EXP(dd2*invrs2);
-							dr22 = eps2+dd2;
-#if (UNROLL >=4)
-							dg3 = ERFC(dr3*inv2rs) + dr3*invpirs*EXP(dd3*invrs2);
-							dr23 = eps2+dd3;
-
-							dg4 = ERFC(dr4*inv2rs) + dr4*invpirs*EXP(dd4*invrs2);
-							dr24 = eps2+dd4;
-#endif
-#endif
-
-#ifdef NMK_SINGLE_PREC
-							dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                                                        
-							dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * ((Real) 1.0) / SQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                                             
-							dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * ((Real) 1.0) / SQRT(dr23 * dr23 * dr23);
-
-							dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * ((Real) 1.0) / SQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#else // NMK_SINGLE_PREC
-							dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-#if (UNROLL > 1)                             
-							dr32 = Bm[k+N_CACHE/UNROLL] * dg2 * INVSQRT(dr22 * dr22 * dr22);
-#if (UNROLL >= 4)                                                  
-							dr33 = Bm[k+2*N_CACHE/UNROLL] * dg3 * INVSQRT(dr23 * dr23 * dr23);
-
-							dr34 = Bm[k+3*N_CACHE/UNROLL] * dg4 * INVSQRT(dr24 * dr24 * dr24);
-#endif
-#endif
-#endif // NMK_SINGLE_PREC
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-#if (UNROLL == 4)
-							ax2 += dx1*dr31 + dx2*dr32 + dx3*dr33 + dx4*dr34;
-							ay2 += dy1*dr31 + dy2*dr32 + dy3*dr33 + dy4*dr34;
-							az2 += dz1*dr31 + dz2*dr32 + dz3*dr33 + dz4*dr34;
-#endif
-#if (UNROLL == 2) 
-							ax2 += dx1*dr31 + dx2*dr32;
-							ay2 += dy1*dr31 + dy2*dr32;
-							az2 += dz1*dr31 + dz2*dr32;
-#endif
-#if (UNROLL == 1)
-							ax2 += dx1*dr31 ;
-							ay2 += dy1*dr31 ;
-							az2 += dz1*dr31 ;
-#endif
+							PP_ACC_UNROLL ;
 						}
 					}
 
@@ -1544,6 +878,7 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 			int ns = tid*pern+(modn-tex*tpass);
 			int nt = ns + pern + tex;
 //			printf ("Thread[%d]: ns = %d, nt = %d.\n", tid, ns, nt);
+
 			for (m=0; m<lb; m++)
 			{
 				x2 = B.x[m];
@@ -1552,44 +887,17 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 #pragma ivdep
 				for (k=ns; k<nt; k++)
 				{
-					dx1 = x2 - A.x[k];
-					dy1 = y2 - A.y[k];
-					dz1 = z2 - A.z[k];
+					PP_SUB_REV(A, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-					dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-					dr31 = Bm[m] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
-#else
-					dr31 = Bm[m] * INVSQRT(dr21 * dr21 * dr21);
-#endif
+					PP_COE_UNROLL(1, Bm, m) ;
 
-#else // NMK_NAIVE_GRAVITY
-					dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-					dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-					idx = (int)(rad2idx * dr1);
-					dr31 = (idx<TABLEN) ? Bm[m] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
-#else // NMK_PP_TAB
-					dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-					dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-					dr31 = Bm[m] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-					dr31 = Bm[m] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-					C.x[k] += dx1*dr31 ;
-					C.y[k] += dy1*dr31 ;
-					C.z[k] += dz1*dr31 ;
+					PP_ACC_REV(C, k) ;
 				}
 			}
 		}
-#else
-		// Original ppkernel with mass.
+
+#else // #if 1 Debug
+		// Original ppkernel without mass.
 		int pern = la/tnum;
 		int modn = la%tnum;
 		int tpass = modn-tid;
@@ -1608,46 +916,18 @@ int ppmkernel(Array3 A, int la, Array3 B, Real *Bm, int lb, Constants *constants
 
 			for (k=0; k<lb; k++)
 			{
-				dx1 = B.x[k] - x2;
-				dy1 = B.y[k] - y2;
-				dz1 = B.z[k] - z2;
+				PP_SUB_NOUNROLL(B, k) ;
+				
+				PP_COE_NOUNROLL(1, Bm, k) ;
 
-#ifdef NMK_NAIVE_GRAVITY
-				dr21 = eps2 + dx1*dx1 + dy1*dy1 + dz1*dz1;
-#ifdef NMK_SINGLE_PREC
-				dr31 = Bm[k] * (((Real) 1.0) / SQRT(dr21 * dr21 * dr21));
-#else
-				dr31 = Bm[k] * (INVSQRT(dr21 * dr21 * dr21));
-#endif
-
-#else // NMK_NAIVE_GRAVITY
-				dd1 = dx1*dx1 + dy1*dy1 + dz1*dz1;
-				dr1 = SQRT(dd1);
-#ifdef NMK_PP_TAB
-				idx = (int)(rad2idx * dr1);
-				dr31 = (idx<TABLEN) ? Bm[k] * (val[idx] + ( dr1 - dlt * idx ) * slp[idx]) : 0;
-#else // NMK_PP_TAB
-				dg1 = ERFC(dr1*inv2rs) + dr1*invpirs*EXP(dd1*invrs2);
-				dr21 = eps2+dd1;
-#ifdef NMK_SINGLE_PREC
-				dr31 = Bm[k] * dg1 * ((Real) 1.0) / SQRT(dr21 * dr21 * dr21);
-#else
-				dr31 = Bm[k] * dg1 * INVSQRT(dr21 * dr21 * dr21);
-#endif
-
-#endif // NMK_PP_TAB
-#endif // NMK_NAIVE_GRAVITY
-
-				ax2 += dx1*dr31 ;
-				ay2 += dy1*dr31 ;
-				az2 += dz1*dr31 ;
+				PP_ACC_NOUNROLL ;
 			}
+
 			C.x[j] += ax2;
 			C.y[j] += ay2;
 			C.z[j] += az2;
 		}
-#endif // if 1
-//#endif // TABLEN
+#endif // #if 1
 	}
 
 #ifdef __MULTI_THREAD_

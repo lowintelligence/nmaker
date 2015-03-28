@@ -63,8 +63,8 @@ int main(int argc, char* argv[])
     Real time, t0, t1, dt;
     Stepping *step;
 
-    Nstep = 120;
-    step = create_stepping_fixed_loga(&constants, Nstep, 0.02, 0.4);
+    Nstep = 75;
+    step = create_stepping_fixed_loga(&constants, Nstep, 0.02, 1.0);
 
 #ifdef TEST_STEP
     if (0 == rank)
@@ -77,7 +77,7 @@ int main(int argc, char* argv[])
 
 
 #ifdef __INTEL_OFFLOAD
-//    warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
+    warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
     if (rank == 0)
         DBG_INFOL(DBG_MEMORY, "MIC memory warm-up finished.\n");
 #endif
@@ -87,25 +87,31 @@ int main(int argc, char* argv[])
     double start_time, tstamp, end_time, start_step;
     start_time = dtime();
 
-    int REFSTEP = 4;
+    int REFSTEP = 2;
     for (n=0; n<Nstep; n++) {
         MPI_Barrier(MPI_COMM_WORLD);
 
         if (0==rank) {
-            CLOG("\n - - - - - - - - - - step %5d - - - - - - - - - - \n", n);
+            CLOG("\n - - - - - - - - - - Step %5d - - - - - - - - - - \n", n);
             CLOG(" z = %.5f\n", status.redshift);
         }
+		start_step = dtime();
 
         if (status.redshift <= 0.0)
             break;
 
 		if ( 0==n ) {
 			partition_system(&constants, &status, &sys);
+			DBG_INFO(DBG_TIME, "[Step %d-init, Pt A] Time of distributing init: %.4f sec\n", n, dtime() - tstamp);
+			tstamp = dtime();
+
 			domain = create_domain(&constants, &status, &sys);
 
 			mark_cuboid(domain) ;
 			broadcast_frontiers(domain, &sys) ;
-			printf(" * redistribute particles! - \n");
+			checkpart(rank, sys.part, sys.num_part, 0.1);
+			DBG_INFO(DBG_TIME, "[Step %d-init, Pt B] Time of subdomain creating: %.4f sec\n", n, dtime() - tstamp);
+			tstamp = dtime();
 
 			pm_param = create_partmesh(&constants, &status, &sys);
 			pthread_t pm_thread1, pm_thread2, pm_thread3;
@@ -115,41 +121,48 @@ int main(int argc, char* argv[])
 
 			pthread_create(&pm_thread2, NULL, convolution_gravity, pm_param);
 
-
 			build_subtrees(domain, &constants);
-			printf( " * build subtree \n" );
+			checkpart(rank, sys.part, sys.num_part, 5000.0);
+			DBG_INFO(DBG_TIME, "[Step %d-init, Pt D] Time of tree building: %.4f sec\n", n, dtime() - tstamp);
+			tstamp = dtime();
+
+			tree_traversal(domain, &constants);
+			DBG_INFO(DBG_TIME, "[Step %d-init, Pt E] Time of force calculation: %.4f sec\n", n, dtime() - tstamp);
+			tstamp = dtime();
 
 			pthread_join(pm_thread2, 0);
-
-			printf(" * PM gravity -  \n");
+			checkaccpm(rank, sys.part, sys.num_part);
 
 			pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
 			pthread_join(pm_thread3, 0);
 			free_partmesh(pm_param);
-		}
-		kick1_system(step, &sys);
-		printf(" * kick system 1\n");
 
+			DBG_INFO(DBG_TIME, "[Step %d-init, Pt C] Time of PM calculation: %.4f sec\n", n, dtime() - tstamp);
+			tstamp = dtime();
+		}
+		kick1_pm(step, &sys);
+		DBG_INFO(DBG_LOGIC, "[Step %d-0] Rank %d kick PM.\n", n, rank);
 
 		double rk1, rk2, rdr;
-		rk1 = step->kick1[n]/REFSTEP;
-		rk2 = step->kick2[n]/REFSTEP;
+//		rk1 = step->kick1[n]/REFSTEP;
+//		rk2 = step->kick2[n]/REFSTEP;
+		rk1 = rk2 = 0.5*(step->kick1[n] + step->kick2[n]) / REFSTEP;		
 		rdr = step->draft[n]/REFSTEP;
-		pthread_t pm_thrd;
 
+		tstamp = dtime();
 
 		for (m=0; m<REFSTEP; m++)
 		{
-			printf(" --- n = %d, m = %d ---\n", n, m);
-
-			if (0 == n && 0 == m) {
-				tree_traversal(domain, &constants);
-				printf(" * traversal - \n");
+			MPI_Barrier(MPI_COMM_WORLD);
+			if (rank==0)
+			{
+				CLOG(" --- Step = %d, Ref = %d ---\n", n, m);
 			}
+
 			kick1_pp(rk1, &sys);
-			printf(" * kick sub 1\n");
 			draft_pp(rdr, &sys);
-			printf(" * draft sub \n");
+			checkpart(rank, sys.part, sys.num_part, 5000.0);
+			DBG_INFO(DBG_LOGIC, "[Step %d-%d] Rank %d kick PP 1 and draft.\n", n, m, rank);
 
 			if (REFSTEP - 1 == m) {
 				/* periodic boundaries */
@@ -162,11 +175,13 @@ int main(int argc, char* argv[])
 						{
 							pos -= box;
 						}
-						if ( pos < 0 )
+						if ( pos < 0.0 )
 						{
 							pos += box;
-					}
+						}
 						sys.part[p].pos[d] = (Real) pos;
+                        if ( sys.part[p].pos[d] >= (Real) box || sys.part[p].pos[d] < (Real)0.0)
+                            sys.part[p].pos[d] = (Real) 0.0;
 
 						if (sys.part[p].pos[d] >= box ) {
 							printf(" bigger than bigger  %f box = %f %f\n", sys.part[p].pos[d], box, sys.part[p].vel[d] );
@@ -182,13 +197,17 @@ int main(int argc, char* argv[])
 
 				free_domain(domain);
 
-
 				partition_system(&constants, &status, &sys);
+				DBG_INFO(DBG_TIME, "[Step %d-%d, Pt A] Time of distributing init: %.4f sec\n", n, m, dtime() - tstamp);
+				tstamp = dtime();
+
 				domain = create_domain(&constants, &status, &sys);
 
-				mark_cuboid(domain) ;
-				broadcast_frontiers(domain, &sys) ;
-				printf(" * redistribute particles!\n");
+				mark_cuboid(domain);
+				broadcast_frontiers(domain, &sys);
+				checkpart(rank, sys.part, sys.num_part, 0.1);
+				DBG_INFO(DBG_TIME, "[Step %d-%d, Pt B] Time of subdomain creating: %.4f sec\n", n, m, dtime() - tstamp);
+				tstamp = dtime();
 
 				pm_param = create_partmesh(&constants, &status, &sys);
 				pthread_t pm_thread1, pm_thread2, pm_thread3;
@@ -196,33 +215,48 @@ int main(int argc, char* argv[])
 				pthread_create(&pm_thread1, NULL, assign_particles, pm_param);
 				pthread_join(pm_thread1, 0);
 
-				build_subtrees(domain, &constants);
-				printf( " * build subtree \n" );
-
 				pthread_create(&pm_thread2, NULL, convolution_gravity, pm_param);
-				printf(" * traversal  \n");
+
+				build_subtrees(domain, &constants);
+				checkpart(rank, sys.part, sys.num_part, 5000.0);
+				DBG_INFO(DBG_TIME, "[Step %d-%d, Pt D] Time of tree building: %.4f sec\n", n, m, dtime() - tstamp);
+				tstamp = dtime();
+
 				tree_traversal(domain, &constants);
+				DBG_INFO(DBG_TIME, "[Step %d-%d, Pt E] Time of force calculation: %.4f sec\n", n, m, dtime() - tstamp);
+				tstamp = dtime();
 
 				pthread_join(pm_thread2, 0);
-				printf(" * PM gravity  \n");
+				checkaccpm(rank, sys.part, sys.num_part);
 
 				pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
 				pthread_join(pm_thread3, 0);
+				checkaccpm(rank, sys.part, sys.num_part);
 				free_partmesh(pm_param);
+
+				DBG_INFO(DBG_TIME, "[Step %d-%d, Pt C] Time of PM calculation: %.4f sec\n", n, m, dtime() - tstamp);
+				tstamp = dtime();
 			}
 			else {
-				printf(" * traversal  \n");
 				tree_traversal(domain, &constants);
+				DBG_INFO(DBG_TIME, "[Step %d-%d, Pt E] Time of force calculation: %.4f sec\n", n, m, dtime() - tstamp);
+				tstamp = dtime();
 			}
 
 			kick2_pp(rk2, &sys);
-			printf(" * kick sub 2 \n");
+			DBG_INFO(DBG_LOGIC, "[Step %d-%d] Rank %d kick PP 2.\n", n, m, rank);
 		}
 
-		kick2_system(step, &sys);
-		printf(" * kick system 2\n");
+		kick2_pm(step, &sys);
+		DBG_INFO(DBG_LOGIC, "[Step %d-%d] Rank %d kick PM 2.\n", n, m, rank);
 		update_stepping(step);
 		status.redshift = 1.0/(step->time)-1.0;
+
+        if (0==rank) {
+            tstamp =  dtime();
+            CLOG( " step[%d] use %lf sec\n",n, tstamp-start_step );
+            CLOG( " duration = %lf [sec]\n", tstamp-start_time);
+        }
 	}
 
     free_domain(domain);
@@ -279,8 +313,8 @@ int main(int argc, char* argv[])
     Real time, t0, t1, dt;
 	Stepping *step;
 
-    Nstep = 120;
-	step = create_stepping_fixed_loga(&constants, Nstep, 0.02, 0.4);
+    Nstep = 75;
+	step = create_stepping_fixed_loga(&constants, Nstep, 0.02, 1.0);
 
 // The first PM
     pm_param = create_partmesh(&constants, &status, &sys);
@@ -301,7 +335,7 @@ int main(int argc, char* argv[])
 
 
 #ifdef __INTEL_OFFLOAD
-//	warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
+	warmUpMIC(rank%constants.NP_PER_NODE%constants.NMIC_PER_NODE, constants.NP_PER_NODE/constants.NMIC_PER_NODE);
 	if (rank == 0)
 		DBG_INFOL(DBG_MEMORY, "MIC memory warm-up finished.\n");
 #endif
@@ -332,18 +366,12 @@ int main(int argc, char* argv[])
 
         domain = create_domain(&constants, &status, &sys);
 
-		DBG_INFO(DBG_TIME, "[Step %d, Pt B] Time of domain decomposition: %.4f sec\n", n, dtime() - tstamp);
-		tstamp = dtime();
-
         mark_cuboid(domain) ;
         broadcast_frontiers(domain, &sys) ;
 
-		DBG_INFO(DBG_TIME, "[Step %d, Pt C] Time of subdomain creating: %.4f sec\n", n, dtime() - tstamp);
-		tstamp = dtime();
-
         kick1_system(step, &sys);
 
-		DBG_INFO(DBG_TIME, "[Step %d, Pt D] Time of force calculation: %.4f sec\n", n, dtime() - tstamp);
+		DBG_INFO(DBG_TIME, "[Step %d, Pt B] Time of subdomain creating: %.4f sec\n", n, dtime() - tstamp);
 		tstamp = dtime();
 
 #ifdef TEST_POT
@@ -375,8 +403,6 @@ int main(int argc, char* argv[])
 		pthread_create(&pm_thread3, NULL, pm_acceleration, pm_param);
 		pthread_join(pm_thread3, 0);
 		free_partmesh(pm_param);
-
-		DBG_INFO(DBG_LOGIC, "[%d] PM done !\n", rank);
 
 #ifdef TEST_POT
         if (0==n) {
@@ -455,15 +481,15 @@ int main(int argc, char* argv[])
         }
 #endif /* TEST_POT */
 
-		DBG_INFO(DBG_TIME, "[Step %d, Pt E] Time of PM calculation: %.4f sec\n", n, dtime() - tstamp);
+		DBG_INFO(DBG_TIME, "[Step %d, Pt C] Time of PM calculation: %.4f sec\n", n, dtime() - tstamp);
 		tstamp = dtime();
 
 		build_subtrees(domain, &constants);
-		DBG_INFO(DBG_TIME, "[Step %d, Pt F] Time of tree building: %.4f sec\n", n, dtime() - tstamp);
+		DBG_INFO(DBG_TIME, "[Step %d, Pt D] Time of tree building: %.4f sec\n", n, dtime() - tstamp);
 		tstamp = dtime();
 
 		tree_traversal(domain, &constants);
-		DBG_INFO(DBG_TIME, "[Step %d, Pt G] Time of force calculation: %.4f sec\n", n, dtime() - tstamp);
+		DBG_INFO(DBG_TIME, "[Step %d, Pt E] Time of force calculation: %.4f sec\n", n, dtime() - tstamp);
 		tstamp = dtime();
 
         draft_system(step, &sys);
@@ -483,7 +509,7 @@ int main(int argc, char* argv[])
     } /* main loop */
     free_stepping(step);
 
-    write_snapshot_node(sys.part, sys.num_part, "output_snap", &constants, &status);
+    write_snapshot_node(sys.part, sys.num_part, "output_snap_tot", &constants, &status);
 
     finalize_system(&constants, &status, &sys);
     if (0==rank) {

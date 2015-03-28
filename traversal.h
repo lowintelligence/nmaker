@@ -35,5 +35,7 @@ __OffloadFunc_Macro__
 int dtt_process_cell(Int TA, Int TB, TWQ* pq_tw, void *param);
 
 void tree_traversal(Domain *dp, Constants *constants);
+int checkaccpm(int rank, Body *part, Int n);
+int checkpart(int rank, Body *part, Int n, Real err);
 
 #endif /* _TRAVERSAL_H_ */

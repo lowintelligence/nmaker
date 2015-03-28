@@ -17,7 +17,7 @@ void kick1_system(Stepping *st, System *sys)
     double kick1 = st->kick1[st->step];
     for (n=0; n<npart; n++) {
         for (d=0; d<3; d++) {
-            part[n].vel[d] += kick1 * part[n].acc_pm[d];
+            part[n].vel[d] += kick1 * (part[n].acc_pm[d] +part[n].acc[d]) ;
         }
     }
 }
@@ -31,10 +31,39 @@ void kick2_system(Stepping *st, System *sys)
     double kick2 = st->kick2[st->step];
     for (n=0; n<npart; n++) {
         for (d=0; d<3; d++) {
+            part[n].vel[d] += kick2 * (part[n].acc_pm[d] +part[n].acc[d]) ;
+        }
+    }
+}
+
+void kick1_pm(Stepping *st, System *sys)
+{
+    Int n, npart;
+    npart = sys->num_part;
+    Body *part = sys->part;
+    int d;
+    double kick1 = st->kick1[st->step];
+    for (n=0; n<npart; n++) {
+        for (d=0; d<3; d++) {
+            part[n].vel[d] += kick1 * part[n].acc_pm[d];
+        }
+    }
+}
+
+void kick2_pm(Stepping *st, System *sys)
+{
+    Int n, npart;
+    npart = sys->num_part;
+    Body *part = sys->part;
+    int d;
+    double kick2 = st->kick2[st->step];
+    for (n=0; n<npart; n++) {
+        for (d=0; d<3; d++) {
             part[n].vel[d] += kick2 * part[n].acc_pm[d];
         }
     }
 }
+
 
 void draft_system(Stepping *st, System *sys)
 {
@@ -84,7 +113,7 @@ void kick1_pp(double k1, System *sys)
     int d;
     for (n=0; n<npart; n++) {
         for (d=0; d<3; d++) {
-            part[n].vel[d] += k1 * (part[n].acc[d] + part[n].acc_pm[d]);
+            part[n].vel[d] += k1 * (part[n].acc[d] );
         }
     }
 }
@@ -97,7 +126,7 @@ void kick2_pp(double k2, System *sys)
     int d;
     for (n=0; n<npart; n++) {
         for (d=0; d<3; d++) {
-            part[n].vel[d] += k2 * (part[n].acc[d] + part[n].acc_pm[d]);
+            part[n].vel[d] += k2 * (part[n].acc[d]);
         }
     }
 }

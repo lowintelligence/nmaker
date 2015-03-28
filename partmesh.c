@@ -463,6 +463,21 @@ void* convolution_gravity(void *param)
     for (i=0; i<slab_size; i++)
         data[i] += slab_send[i];
 
+//	{
+//		int nx, ny, nz;
+//		double value, data_max = 0.0;
+//		double data_min = data[3*pm_nside*pm_nside_pad];
+//        for (nx = 3, ny = 0; ny<pm_nside; ny++) {
+//            for (nz=0; nz<pm_nside; nz++) {
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] > data_max)
+//                    data_max = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] < data_min)
+//                    data_min = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//            }
+//        }
+//		printf("[Den0 %d] %g %g\n", rank, data_max, data_min);
+//	}
+
     for (loop=1, pm_comm_mask=1; loop<pm_comm_loop; loop++, pm_comm_mask++)
     {
         conj = rank^pm_comm_mask;
@@ -517,7 +532,7 @@ void* convolution_gravity(void *param)
     FILE *fd;
     int nx, nz, ny;
 
-    if (0==rank && 0 == snap_count % 50 ) {
+    if (0==rank && 0 == snap_count % 1 ) {
         printf("   output  snap %d %d\n", snap_index, snap_count);
         sprintf(fname, "density_%d.ppm", snap_index);
         FILE *fp = fopen(fname, "w");
@@ -542,17 +557,17 @@ void* convolution_gravity(void *param)
                 double weighted_value;
                 weighted_value = value = 0.0;
                 nx = 3;
-                for (nx=0; nx<20; nx++)
+                for (nx=0; nx<10; nx++)
                     weighted_value += data[(nx*pm_nside + ny)*pm_nside_pad + nz];
                 weighted_value /= 20.0;
                 value += weighted_value;
 
-                for (nx=20; nx<40; nx++)
+                for (nx=10; nx<20; nx++)
                     weighted_value += data[(nx*pm_nside + ny)*pm_nside_pad + nz];
                 weighted_value /= 40.0;
                 value += weighted_value;
 
-                for (nx=40; nx<60; nx++)
+                for (nx=20; nx<40; nx++)
                     weighted_value += data[(nx*pm_nside + ny)*pm_nside_pad + nz];
                 weighted_value /= 100.0;
                 value += weighted_value;
@@ -584,6 +599,21 @@ void* convolution_gravity(void *param)
 
     /*  convolution */
     MPI_Barrier(PM_COMM_WORLD);
+//	{
+//		int nx, ny, nz;
+//		double value, data_max = 0.0;
+//		double data_min = data[3*pm_nside*pm_nside_pad];
+//        for (nx = 3, ny = 0; ny<pm_nside; ny++) {
+//            for (nz=0; nz<pm_nside; nz++) {
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] > data_max)
+//                    data_max = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] < data_min)
+//                    data_min = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//            }
+//        }
+//		printf("[Den1 %d] %g %g\n", rank, data_max, data_min);
+//	}
+
 
 #ifndef FFTW3_LIB
     rfftwnd_mpi(forward_plan, 1, data, work, FFTW_TRANSPOSED_ORDER);
@@ -600,7 +630,7 @@ void* convolution_gravity(void *param)
     scale2 = 2.0 * M_PI * split/boxsize;
     scale2 = (scale2*scale2);
 
-    scale2 = 0.0;
+//    scale2 = 0.0;
 
     double pref = - gravconst * (delta*delta)/(M_PI * pm_nside);
 
@@ -651,7 +681,7 @@ void* convolution_gravity(void *param)
             sincx = Kx * pi_nside;
             sincx = sin(sincx)/sincx;
 
-#pragma ivdep
+//#pragma ivdep
             for (Z = 0; Z <pm_nside_h_pad; ++Z) {
                 Kz = (double)Z;
                 K2 = Kz*Kz + Kxy2;
@@ -707,8 +737,37 @@ void* convolution_gravity(void *param)
         cdata[0].re = 0.0;
         cdata[0].im = 0.0;
     }
+//	{
+//		int nx, ny, nz;
+//		double value, data_max = 0.0;
+//		double data_min = data[3*pm_nside*pm_nside_pad];
+//        for (nx = 3, ny = 0; ny<pm_nside; ny++) {
+//            for (nz=0; nz<pm_nside; nz++) {
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] > data_max)
+//                    data_max = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] < data_min)
+//                    data_min = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//            }
+//        }
+//		printf("[Den3 %d] %g %g\n", rank, data_max, data_min);
+//	}
 
     rfftwnd_mpi(inverse_plan, 1, data, work, FFTW_TRANSPOSED_ORDER);
+
+//	{
+//		int nx, ny, nz;
+//		double value, data_max = 0.0;
+//		double data_min = data[3*pm_nside*pm_nside_pad];
+//        for (nx = 3, ny = 0; ny<pm_nside; ny++) {
+//            for (nz=0; nz<pm_nside; nz++) {
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] > data_max)
+//                    data_max = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//                if( data[(nx*pm_nside + ny)*pm_nside_pad + nz] < data_min)
+//                    data_min = data[(nx*pm_nside + ny)*pm_nside_pad + nz];
+//            }
+//        }
+//		printf("[Den4 %d] %g %g\n", rank, data_max, data_min);
+//	}
 
     rfftwnd_mpi_destroy_plan(forward_plan);
     rfftwnd_mpi_destroy_plan(inverse_plan);
@@ -945,7 +1004,8 @@ void* pm_acceleration(void* param)
     NX_PAD = NX + 4;
     NY_PAD = NY + 4;
     NZ_PAD = NZ + 4;
-
+	
+//	printf("[Pot %d] %f\n", rank, pot[0]);
     for (x0=2; x0<NX+2; x0++) {
         x_2 = x0-2;
         x_1 = x0-1;

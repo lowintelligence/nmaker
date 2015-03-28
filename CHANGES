@@ -1,4 +1,13 @@
 ***********************************************
+Changes from last update to March 26, 2015:
+-----------------------------------------------
+	1. Rewrite the ppkernel.c with macro definition.
+	2. Correcting some bugs in tree traversal and file reading.
+	3. Adding some numerical checking procedures in main function, tree traversal and PM.
+	4. Seperate PM stepping from PP stepping.
+***********************************************
+
+***********************************************
 Changes from last update to Januray 30, 2015:
 -----------------------------------------------
 	1. Correcting the two mistakes in PP calculation.

@@ -147,16 +147,9 @@ void read_body_from_file(Body *sys, char filename[], Long n_start, Long n_body)
     {
         fread(&id, id_size, 1, fsnap);
         sys[n].id = (Long)id;
+        sys[n].mass = head.mass[1];
     }
     fclose(fsnap);
-
-    for (n=0; n<n_body; n++)
-    {
-        fread(&id, id_size, 1, fsnap);
-        sys[n].id = n;
-        sys[n].mass = head.mass[1];
-//        sys[n].mass = 0.0;
-    }
 
     double gdt2unit = pow( 1.0/(1.0+head.redshift), 1.5); //for gadget2 format
     for (n=0; n<n_body; n++) {
@@ -220,6 +213,7 @@ void write_snapshot_node(Body *sys, Long n_count, char fname[], Constants *cst, 
     int rank, numproc;
     int npart = (int)n_count;
 
+	CLOG("Write %d particle into file '%s'\n", npart, fname);
     Header head;
 //////////////////////////////////////
     head.npart[0] = 0;

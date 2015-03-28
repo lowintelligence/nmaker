@@ -129,7 +129,7 @@ void init_random_particles(Constants *constants, System *sys, Long n_start, Long
 #else
     srand48(8888*myid);
 #endif
-	double velocity = constants->BOX_SIZE/20.0;
+	double velocity = constants->BOX_SIZE/((Real)(1<<(constants->MESH_BITS+1)));
     for (n=0; n<n_count; n++)
     {
 		for (m=0; m<DIM; m++)
@@ -229,17 +229,22 @@ void initialize_system(char fnamepara[], Constants *constparam_ptr, Status* stat
     constparam_ptr->SPLIT_SCALE  = 1.25*width_grid;
     constparam_ptr->CUTOFF_SCALE = 6.0*width_grid;
     constparam_ptr->GRAV_CONST = 43007.1;
-	constparam_ptr->EPS2 = 0.00026;
+	constparam_ptr->EPS2 = (constparam_ptr->SOFTEN_SCALE*constparam_ptr->SOFTEN_SCALE);
 
 #ifdef NMK_PP_TAB
-    Real x, dx, rs;
+    Real x, dx, rs, G, eps2;
     Real sqrt_pi = sqrt(M_PI);
     constparam_ptr->delta=(Real)(constparam_ptr->CUTOFF_SCALE)/((double)TABLEN);
     dx = constparam_ptr->delta;
     rs = constparam_ptr->SPLIT_SCALE;
+	G  = constparam_ptr->GRAV_CONST;
+	eps2 = constparam_ptr->EPS2;
+	
+	LOG_INFO(LOG_VB1, " TAB = %d G = %f rs = %f width_grid = %f dx = %f eps2 = %f\n", TABLEN, G, rs, width_grid, dx, eps2 );
+
     for (n=0; n<TABLEN; n++) {
         x = n*dx;
-        constparam_ptr->value[n]=(1.0-erf(x/2/rs)+(x/sqrt_pi/rs)*exp(-x*x/4/rs/rs))/pow( (x*x+rs*rs),1.5);
+        constparam_ptr->value[n] = G*(1.0-erf(x/2/rs)+(x/sqrt_pi/rs)*exp(-x*x/4/rs/rs))/pow( (x*x+rs*rs),1.5);
     }
     for (n=0; n<TABLEN-1; n++) {
         constparam_ptr->slope[n]=(constparam_ptr->value[n+1] - constparam_ptr->value[n])/dx;

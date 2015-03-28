@@ -3,7 +3,7 @@
 #include "subtree.h"
 #include <assert.h>
 
-static double factor_part_node = 1;
+static double factor_part_node = 0.5;
 // new space to build tree as a uint to sent to the other domain or node
 // build top-subtree
 // the tree must be smoothed during tree-traveral

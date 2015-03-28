@@ -1,8 +1,36 @@
 ********************** Unsolved issues **********************
-1. The setting of 'eps2' was a constant as 0.00026, not strict.
-2. When tree node reaches the MAX_TREE_LEVEL but the particles exceeding MAX_PACKAGE_SIZE, may be not stable.
+1. When tree node reaches the MAX_TREE_LEVEL but the particles exceeding MAX_PACKAGE_SIZE, may be not stable.
+2. While PM thread runs asyncronizing with Tree threads, sometimes there would occur memory collision, don't know why.
+3. After long time simulation, while z is rather small, the particle was clustered, and the computation is not balanced.
 
 ******************** Code fixing history ********************
+------------------2015/03/28 19:00--------------------
+traversal.h
+traversal.c
+	Added checknan/checkpart/checkaccpm functions for debugging.
+	Eliminated a bug in queue processing.
+
+partmesh.c
+	Added some codes (commented) for debugging.
+
+main.c
+	Corrected the barrier issue and the output information.
+
+------------------2015/03/08 17:00--------------------
+stepping.c
+	Using kick1_pm and kick2_pm function instead of the old kick_system function.
+
+initial.c
+	Corrected the initialization of EPS2.
+	Changed the random velocity initialization contidion.
+
+main.c
+	Added the refine step running mode.
+
+------------------2015/02/26 7:00--------------------
+ppkernel.c
+	Rewrite the calculation with macro definitions.
+
 ------------------2015/02/08 7:00--------------------
 ppkernel.c
 	Corrected two numeric mistake in ppkernel.

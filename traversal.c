@@ -19,6 +19,82 @@ __OffloadVar_Macro__
 static Node *tree; // thread number
 
 __OffloadFunc_Macro__
+int checknan(int rank, int offset, Array3 pa, int n, int code)
+{
+	int i;
+	int nan = 0;
+	for(i=0; i<n; i++)
+	{
+		if(isnanf(pa.x[i]) || isnanf(pa.y[i]) || isnanf(pa.z[i]))
+		{
+			CLOG("**[%d]** %d, %f %f %f, %d\n", rank, offset+i, pa.x[i], pa.y[i], pa.z[i], code);
+			nan = 1;
+		}
+	}
+	return nan;
+}
+
+__OffloadFunc_Macro__
+int printarray(int rank, int tid, int offset, Array3 pa, int n, Real *mass)
+{
+	int i;
+	for(i=0; i<n; i++)
+	{
+		if(mass)
+		{
+			CLOG("  [%d-%d]** %d, %d, %f %f %f, %f\n", rank, tid, offset+i, n, pa.x[i], pa.y[i], pa.z[i], mass[i]);
+		}
+		else
+		{
+			CLOG("  [%d-%d]** %d, %d, %f %f %f, %f %f %f\n", rank, tid, offset+i, n, pa.x[i], pa.y[i], pa.z[i], part[offset+i].pos[0], part[offset+i].pos[1], part[offset+i].pos[2]);
+		}
+	}
+}
+
+int checkaccpm(int rank, Body *part, Int n)
+{
+	Int i;
+	int correct=10;
+	for(i=0; i<n; i++)
+	{
+		if(part[i].acc_pm[0]>=(Real) 100000.0 || part[i].acc_pm[1]>=(Real) 100000.0 || part[i].acc_pm[2]>=(Real) 100000.0 ||
+			part[i].acc_pm[0]<(Real) -100000.0 || part[i].acc_pm[1]<(Real) -100000.0 || part[i].acc_pm[2]<(Real) -100000.0)
+		{
+			CLOG("==[%d]== %d, %f %f %f, %f %f %f, %f %f %f, %f %f %f\n", rank, i, part[i].pos[0], part[i].pos[1], part[i].pos[2], part[i].vel[0], part[i].vel[1], part[i].vel[2], part[i].acc[0], part[i].acc[1], part[i].acc[2], part[i].acc_pm[0], part[i].acc_pm[1], part[i].acc_pm[2]);
+			correct--;
+			if(correct==0) break;
+		}
+	}
+	if(correct==0)
+	{
+		sleep(2);
+		system_exit(99999);
+	}
+}
+
+int checkpart(int rank, Body *part, Int n, Real error)
+{
+	Int i;
+	int correct=10;
+	for(i=0; i<n; i++)
+	{
+		if(part[i].pos[0]>=(Real) 100000.0+error || part[i].pos[1]>=(Real) 100000.0+error || 
+			part[i].pos[2]>=(Real) 100000.0+error ||
+			part[i].pos[0]<-error || part[i].pos[1]<-error || part[i].pos[2]<-error)
+		{
+			CLOG("==[%d]== %d, %f %f %f, %f %f %f, %f %f %f, %f %f %f\n", rank, i, part[i].pos[0], part[i].pos[1], part[i].pos[2], part[i].vel[0], part[i].vel[1], part[i].vel[2], part[i].acc[0], part[i].acc[1], part[i].acc[2], part[i].acc_pm[0], part[i].acc_pm[1], part[i].acc_pm[2]);
+			correct--;
+			if(correct==0) break;
+		}
+	}
+	if(correct==0)
+	{
+		sleep(2);
+		system_exit(99999);
+	}
+}
+
+__OffloadFunc_Macro__
 int getGridIndex(int *gridP, int *curIndex, Domain *dp)
 {
 	*curIndex = gridP[0];
@@ -78,16 +154,33 @@ void* teamMaster(void* param)
 
 	int cnt = 0;
 
-	pa.x = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8301);
-	pa.y = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8302);
-	pa.z = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8303);
-	pb.x = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8304);
-	pb.y = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8305);
-	pb.z = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8306);
-	pc.x = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8307);
-	pc.y = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8308);
-	pc.z = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8309);
-	mass = (Real*)xmemalign(sizeof(Real)*constants->MAX_PACKAGE_SIZE*(1<<(constants->MAX_TREE_LEVEL*2)), 8310);
+	Int maxpart = 0;
+	int maxgrid = -1;
+	int i;
+	for (i=0; i<In*Jn*Kn; i++)
+	{
+		if(dp->mroot[i] && tree[dp->mroot[i]].nPart > maxpart)
+		{
+			maxpart = tree[dp->mroot[i]].nPart;
+			maxgrid = i;
+		}
+	}
+	
+	if(pth->teamid==0)
+	{
+		DBG_INFO(DBG_TMP, "[%d-%d] Mesh maxpart is %d in Grid %d.\n", dp->rank, pth->teamid, maxpart, maxgrid);
+	}
+
+	pa.x = (Real*)xmemalign(sizeof(Real)*maxpart, 8301);
+	pa.y = (Real*)xmemalign(sizeof(Real)*maxpart, 8302);
+	pa.z = (Real*)xmemalign(sizeof(Real)*maxpart, 8303);
+	pb.x = (Real*)xmemalign(sizeof(Real)*maxpart, 8304);
+	pb.y = (Real*)xmemalign(sizeof(Real)*maxpart, 8305);
+	pb.z = (Real*)xmemalign(sizeof(Real)*maxpart, 8306);
+	pc.x = (Real*)xmemalign(sizeof(Real)*maxpart, 8307);
+	pc.y = (Real*)xmemalign(sizeof(Real)*maxpart, 8308);
+	pc.z = (Real*)xmemalign(sizeof(Real)*maxpart, 8309);
+	mass = (Real*)xmemalign(sizeof(Real)*maxpart, 8310);
 
 	double tmutex=0.0, tqueue=0.0, tstamp;
 
@@ -169,7 +262,7 @@ void* teamMaster(void* param)
 	}
 
 	DBG_INFO(DBG_LOGIC, "[%d-%d] Local tree processing counted %d pairs.\n", dp->rank, pth->teamid, cnt);
-	DBG_INFO(DBG_TIME, "[%d-%d] mutex lock time = %f, queue & pp time = %f\n", dp->rank, pth->teamid, tmutex, tqueue);
+	DBG_INFO(DBG_CALC, "[%d-%d] mutex lock time = %f, queue & pp time = %f\n", dp->rank, pth->teamid, tmutex, tqueue);
 
 	free(pa.x);
 	free(pa.y);
@@ -399,6 +492,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 			pthread_barrier_wait(pth->bar);
 			ppkernel(pa, nA, pb, nB, pth->constants, pc, pth->nSlave, pth->blockid);
 			pthread_barrier_wait(pth->bar);
+			checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 1);
 			pusharray3m(&part[tree[TA].firstPart], nA, pc, partmass);
 		}
 		else
@@ -462,6 +556,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 							pth->counter += nA*(nB*22+2);
 							ppkernel(pa, nA, pb, nB, pth->constants, pc, pth->nSlave, pth->blockid);
 							pthread_barrier_wait(pth->bar);
+							checknan(pth->dp->rank, tree[TA1].firstPart, pc, nA, 2);
 							pusharray3m(&part[tree[TA1].firstPart], nA, pc, partmass);
 						}
 						else
@@ -470,6 +565,13 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 							pth->counter += nA*(nB*23+1);
 							ppmkernel(pa, nA, pb, mass, nB, pth->constants, pc, pth->nSlave, pth->blockid);
 							pthread_barrier_wait(pth->bar);
+							checknan(pth->dp->rank, tree[TA1].firstPart, pc, nA, 3);
+//							if(checknan(pth->dp->rank, tree[TA1].firstPart, pc, nA, 3))
+//							{
+//								printarray(pth->dp->rank, pth->teamid, tree[TA1].firstPart, pa, nA, NULL);
+//								sleep(2);
+//								system_exit(99999);
+//							}
 							pusharray3(&part[tree[TA1].firstPart], nA, pc);
 						}
 					}
@@ -503,7 +605,7 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 //				mass[nB+xx] = partmass;
 //			}
 //			nB += tree[TB].nPart;
-			nB = 1;
+			nB += 1;
 //			DBG_INFO(DBG_TMP, "[Accum] TB_Acc  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 		}
 		else
@@ -515,8 +617,8 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 			if ( tree[TA].nChildren==0 && tree[TB].nChildren==0 )
 #endif
 			{
-				packarray3(&part[tree[TB].firstPart], nB, pb);
-				nB = tree[TB].nPart;
+				packarray3(&part[tree[TB].firstPart], tree[TB].nPart, pb);
+				nB += tree[TB].nPart;
 //				DBG_INFO(DBG_TMP, "[Accum] TB_Dec  TA=%ld, nA=%d, nB=%d, calcm=%d\n", TA, nA, nB, calcm); 
 			}
 #ifdef __MIC__
@@ -694,6 +796,14 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 				pth->counter += nA*(nB*22+2);
 				ppkernel(pa, nA, pb, nB, pth->constants, pc, pth->nSlave, pth->blockid);
 				pthread_barrier_wait(pth->bar);
+//				checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 4);
+				if(checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 4))
+				{
+					printarray(pth->dp->rank, pth->teamid, tree[TA].firstPart, pa, nA, NULL);
+					printarray(pth->dp->rank, pth->teamid, tree[TA].firstPart, pb, nB, mass);
+					sleep(2);
+					system_exit(99999);
+				}
 				pusharray3m(&part[tree[TA].firstPart], nA, pc, partmass);
 			}
 			else
@@ -702,6 +812,13 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 				pth->counter += nA*(nB*23+1);
 				ppmkernel(pa, nA, pb, mass, nB, pth->constants, pc, pth->nSlave, pth->blockid);
 				pthread_barrier_wait(pth->bar);
+				checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 5);
+//				if(checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 5))
+//				{
+//					printarray(pth->dp->rank, pth->teamid, tree[TA].firstPart, pa, nA, NULL);
+//					sleep(2);
+//					system_exit(99999);
+//				}
 				pusharray3(&part[tree[TA].firstPart], nA, pc);
 			}
 		}
@@ -747,6 +864,8 @@ void tree_traversal(Domain *dp, Constants *constants)
 		part[i].acc[2] = (Real) 0.0;
 		part[i].mass = fpart[i].mass;
 	}
+
+	checkpart(dp->rank, fpart, npart, 5000.0);
 
 	int myid=dp->rank;
 	int nproc = dp->nproc;
@@ -813,9 +932,9 @@ void tree_traversal(Domain *dp, Constants *constants)
 	counter += counter_mic;
 
 	DBG_INFO(DBG_TIME, "[%d] Treewalking: offload and transfer time = %f, ratio = %.5f, cnt = %ld.\n", dp->rank, dtime()-tstamp, constants->CPU_RATIO, counter);
-	if(constants->DYNAMIC_LOAD && (1.15*tstampc < tstampm || 0.9*tstampc > tstampm))
+	if(constants->DYNAMIC_LOAD && (1.11*tstampc < tstampm || 0.9*tstampc > tstampm))
 	{
-		double vratio = ((tstampm / tstampc) - 1) * 0.7;
+		double vratio = (((tstampm / tstampc) - 1)*0.9) * (tstampm > tstampc ? constants->CPU_RATIO : 1-constants->CPU_RATIO);
 		int vgrid = (int)((double) (splitgrid - gstart) * vratio);
 		if (vgrid != 0)
 		{
@@ -835,13 +954,13 @@ void tree_traversal(Domain *dp, Constants *constants)
 	for (i=0; i<npart; i++)
 	{
 #if (defined NMK_NAIVE_GRAVITY) || (defined NMK_PP_TAB)
-		fpart[i].acc[0] += part[i].acc[0];
-		fpart[i].acc[1] += part[i].acc[1];
-		fpart[i].acc[2] += part[i].acc[2];
+		fpart[i].acc[0] = part[i].acc[0];
+		fpart[i].acc[1] = part[i].acc[1];
+		fpart[i].acc[2] = part[i].acc[2];
 #else
-		fpart[i].acc[0] += constants->GRAV_CONST*part[i].acc[0];
-		fpart[i].acc[1] += constants->GRAV_CONST*part[i].acc[1];
-		fpart[i].acc[2] += constants->GRAV_CONST*part[i].acc[2];
+		fpart[i].acc[0] = constants->GRAV_CONST*part[i].acc[0];
+		fpart[i].acc[1] = constants->GRAV_CONST*part[i].acc[1];
+		fpart[i].acc[2] = constants->GRAV_CONST*part[i].acc[2];
 #endif
 	}
 
@@ -860,4 +979,77 @@ void tree_traversal(Domain *dp, Constants *constants)
 	MPI_Barrier(MPI_COMM_WORLD);
 	exit(0);
 #endif
+
+/*
+    char file[256];
+	sprintf(file, "pt.acc.cell2");
+	FILE *fp = fopen(file, "w");
+	for (i=0; i<npart; i++)
+	{
+    double dr, df, dfp, dfm;
+    double dx = fpart[i].pos[0] -  192.0/2.0;
+    double dy = fpart[i].pos[1]  - 192.0/2.0;
+    double dz = fpart[i].pos[2]  - 192.0/2.0;
+    double apx, amx, apy, amy, apz, amz, ax, ay, az;
+    apx = fpart[i].acc[0];
+    apy = fpart[i].acc[1];
+    apz = fpart[i].acc[2];
+
+    amx = fpart[i].acc_pm[0];
+    amy = fpart[i].acc_pm[1];
+    amz = fpart[i].acc_pm[2];
+
+    ax = fpart[i].acc[0] + fpart[i].acc_pm[0];
+    ay = fpart[i].acc[1] + fpart[i].acc_pm[1];
+    az = fpart[i].acc[2] + fpart[i].acc_pm[2];
+
+
+    dr = sqrt(dx*dx + dy*dy + dz*dz);
+    df = sqrt(ax*ax + ay*ay +az*az);
+    dfp = sqrt(apx*apx + apy*apy +apz*apz);
+    dfm = sqrt(amx*amx + amy*amy +amz*amz);
+
+		fprintf(fp, "%lf %lf %lf %lf %f %f %f %f %f %f\n", dr, df, dfp, dfm, fpart[i].pos[0], fpart[i].pos[1], fpart[i].pos[2], fpart[i].acc[0], fpart[i].acc[1], fpart[i].acc[2]);
+
+	}
+	fclose(fp);
+	MPI_Barrier(MPI_COMM_WORLD);
+	exit(0);
+*/
+/*
+    char file[256];
+	sprintf(file, "pt.acc.cell2");
+	FILE *fp = fopen(file, "w");
+	for (i=0; i<npart; i++)
+	{
+    double dr, df, dfp, dfm;
+    double dx = fpart[i].pos[0] -  192.0/2.0;
+    double dy = fpart[i].pos[1]  - 192.0/2.0;
+    double dz = fpart[i].pos[2]  - 192.0/2.0;
+    double apx, amx, apy, amy, apz, amz, ax, ay, az;
+    apx = fpart[i].acc[0];
+    apy = fpart[i].acc[1];
+    apz = fpart[i].acc[2];
+
+    amx = fpart[i].acc_pm[0];
+    amy = fpart[i].acc_pm[1];
+    amz = fpart[i].acc_pm[2];
+
+    ax = fpart[i].acc[0] + fpart[i].acc_pm[0];
+    ay = fpart[i].acc[1] + fpart[i].acc_pm[1];
+    az = fpart[i].acc[2] + fpart[i].acc_pm[2];
+
+
+    dr = sqrt(dx*dx + dy*dy + dz*dz);
+    df = sqrt(ax*ax + ay*ay +az*az);
+    dfp = sqrt(apx*apx + apy*apy +apz*apz);
+    dfm = sqrt(amx*amx + amy*amy +amz*amz);
+
+		fprintf(fp, "%lf %lf %lf %lf %f %f %f %f %f %f\n", dr, df, dfp, dfm, fpart[i].pos[0], fpart[i].pos[1], fpart[i].pos[2], fpart[i].acc[0], fpart[i].acc[1], fpart[i].acc[2]);
+
+	}
+	fclose(fp);
+	MPI_Barrier(MPI_COMM_WORLD);
+	exit(0);
+*/
 }

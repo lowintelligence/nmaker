@@ -16,9 +16,9 @@ MICNUM        2
 NTEAMCPU      8
 NTEAMMIC      60
 CPURATIO      0.16
-TREEMAX       4
+TREEMAX       6
 TREEMIN       1
 NCRITI        128
-PPSIZE        2048
+PPSIZE        1024
 RNDPART       1
 ICPATH        ./data/ic_128
