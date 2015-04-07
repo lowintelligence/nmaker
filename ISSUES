@@ -4,6 +4,11 @@
 3. After long time simulation, while z is rather small, the particle was clustered, and the computation is not balanced.
 
 ******************** Code fixing history ********************
+------------------2015/03/30 10:00--------------------
+traversal.h
+traversal.c
+	Modified the task pool with a indirect refering array.
+
 ------------------2015/03/28 19:00--------------------
 traversal.h
 traversal.c

@@ -8,6 +8,12 @@
 
 #define SQROOT3 1.73205080705688773
 
+typedef struct _taskinfo
+{
+	int gridid;
+	int npart;
+} GridTask;
+
 typedef struct _dttblock
 {
 	int blockid;//id in one block
@@ -25,7 +31,9 @@ typedef struct _dttblock
 	pthread_barrier_t *bar;
 
     int* gridP;
-	int* curIndex;	
+	int* curIndex;
+	GridTask* gtask;
+	int maxpart; 
 } DttBlock;
 
 __OffloadFunc_Macro__

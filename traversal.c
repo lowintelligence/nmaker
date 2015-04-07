@@ -95,11 +95,11 @@ int checkpart(int rank, Body *part, Int n, Real error)
 }
 
 __OffloadFunc_Macro__
-int getGridIndex(int *gridP, int *curIndex, Domain *dp)
+int getGridIndex(int *gridP, int *curIndex, Domain *dp, GridTask *gtask)
 {
 	*curIndex = gridP[0];
 	gridP[0]++;
-	while(*curIndex<gridP[1] && (dp->tag[*curIndex]!=TAG_OUTERCORE && dp->tag[*curIndex]!=TAG_FRONTIERS))
+	while(*curIndex<gridP[1] && (dp->tag[gtask[*curIndex].gridid]!=TAG_OUTERCORE && dp->tag[gtask[*curIndex].gridid]!=TAG_FRONTIERS))
 	{
 		*curIndex = gridP[0];
 		gridP[0]++;
@@ -146,6 +146,7 @@ void* teamMaster(void* param)
 
 	int *curIndex = pth->curIndex;
 	int *gridP = pth->gridP;
+	GridTask *gtask = pth->gtask;
 	pthread_mutex_t *mutex = pth->mutex;
 
 	int In = dp->nSide[0];
@@ -154,33 +155,16 @@ void* teamMaster(void* param)
 
 	int cnt = 0;
 
-	Int maxpart = 0;
-	int maxgrid = -1;
-	int i;
-	for (i=0; i<In*Jn*Kn; i++)
-	{
-		if(dp->mroot[i] && tree[dp->mroot[i]].nPart > maxpart)
-		{
-			maxpart = tree[dp->mroot[i]].nPart;
-			maxgrid = i;
-		}
-	}
-	
-	if(pth->teamid==0)
-	{
-		DBG_INFO(DBG_TMP, "[%d-%d] Mesh maxpart is %d in Grid %d.\n", dp->rank, pth->teamid, maxpart, maxgrid);
-	}
-
-	pa.x = (Real*)xmemalign(sizeof(Real)*maxpart, 8301);
-	pa.y = (Real*)xmemalign(sizeof(Real)*maxpart, 8302);
-	pa.z = (Real*)xmemalign(sizeof(Real)*maxpart, 8303);
-	pb.x = (Real*)xmemalign(sizeof(Real)*maxpart, 8304);
-	pb.y = (Real*)xmemalign(sizeof(Real)*maxpart, 8305);
-	pb.z = (Real*)xmemalign(sizeof(Real)*maxpart, 8306);
-	pc.x = (Real*)xmemalign(sizeof(Real)*maxpart, 8307);
-	pc.y = (Real*)xmemalign(sizeof(Real)*maxpart, 8308);
-	pc.z = (Real*)xmemalign(sizeof(Real)*maxpart, 8309);
-	mass = (Real*)xmemalign(sizeof(Real)*maxpart, 8310);
+	pa.x = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8301);
+	pa.y = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8302);
+	pa.z = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8303);
+	pb.x = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8304);
+	pb.y = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8305);
+	pb.z = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8306);
+	pc.x = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8307);
+	pc.y = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8308);
+	pc.z = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8309);
+	mass = (Real*)xmemalign(sizeof(Real)*pth->maxpart, 8310);
 
 	double tmutex=0.0, tqueue=0.0, tstamp;
 
@@ -198,7 +182,7 @@ void* teamMaster(void* param)
 		tstamp = dtime();
 
 		pthread_mutex_lock(mutex);
-		finish = getGridIndex(gridP, curIndex, dp);
+		finish = getGridIndex(gridP, curIndex, dp, gtask);
 		pthread_mutex_unlock(mutex);
 
 		tmutex += dtime() - tstamp;
@@ -209,8 +193,8 @@ void* teamMaster(void* param)
 			break;
 		}
 
-		cella = *curIndex;
-		DBG_INFO(DBG_CALC, "[%d-%d] Calculate the %d/%d mesh.\n", dp->rank, pth->teamid, cella, pth->gridP[1]);
+		cella = pth->gtask[*curIndex].gridid;
+		DBG_INFO(DBG_CALC, "[%d-%d] Calculate the grid %d/%d particles in %d/%d mesh.\n", dp->rank, pth->teamid, cella, tree[dp->mroot[cella]].nPart, pth->gridP[0], pth->gridP[1]);
 
 		tstamp = dtime();
 
@@ -278,100 +262,149 @@ void* teamMaster(void* param)
 }
 
 __OffloadFunc_Macro__
+int CompnPart(const void *p1, const void *p2)
+{
+	return (((GridTask*)p2)->npart - ((GridTask*)p1)->npart);
+}
+
+__OffloadFunc_Macro__
 int dtt_threaded(Domain *dp, Constants *constants, int gs, int ge, int nTeam, int nSlave, long *counter)
 {
-		int i;
-		TWQ *twqueues;
+	if (gs==ge)
+	{
+		return 0;
+	}
 
-		DttBlock *pth;
-		pthread_t *thread;
+	int i;
+	TWQ *twqueues;
 
-		int tnum = nTeam*nSlave;
+	DttBlock *pth;
+	pthread_t *thread;
 
-		pth = (DttBlock*)xmalloc(sizeof(DttBlock)*tnum, 8012);
-		thread = (pthread_t*)xmalloc(sizeof(pthread_t)*tnum, 8013);
-		twqueues=(TWQ*)xmalloc(sizeof(TWQ)*nTeam, 8014);
+	int tnum = nTeam*nSlave;
 
-		initGlobal(part, tree);
-		init_queues_tw(twqueues, nTeam);
+	pth = (DttBlock*)xmalloc(sizeof(DttBlock)*tnum, 8012);
+	thread = (pthread_t*)xmalloc(sizeof(pthread_t)*tnum, 8013);
+	twqueues=(TWQ*)xmalloc(sizeof(TWQ)*nTeam, 8014);
 
-		int gridRange[2];
-		gridRange[0]=gs;
-		gridRange[1]=ge;
+	initGlobal(part, tree);
+	init_queues_tw(twqueues, nTeam);
 
-		int *curIndex;
-		pthread_mutex_t mutex;
-		pthread_barrier_t *bar;
-		PPParameter *pppar;
+	int In = dp->nSide[0];
+	int Jn = dp->nSide[1];
+	int Kn = dp->nSide[2];
 
-		curIndex = (int*)xmalloc(sizeof(int)*nTeam, 8015);
-		bar = (pthread_barrier_t*)xmalloc(sizeof(pthread_barrier_t)*nTeam, 8016);
-		pppar = (PPParameter*)xmalloc(sizeof(PPParameter)*nTeam, 8017);
+	Int maxpart = tree[dp->mroot[gs]].nPart;
+	int maxgrid = gs;
+	int ghs, ghe;
 
-		for (i=0; i<nTeam; i++)
+	ghs = gs-Jn*Kn-Kn-1;
+	ghe = ge+Jn*Kn+Kn+1;
+	if (ghs<0) ghs = 0;
+	if (ghe>In*Jn*Kn) ghe = In*Jn*Kn;
+
+	for (i=ghs; i<ghe; i++)
+	{
+		if(dp->mroot[i] && tree[dp->mroot[i]].nPart > maxpart)
 		{
-			curIndex[i]=gridRange[0];
-			pthread_barrier_init(&bar[i], NULL, nSlave);
-			pppar[i].finish=0;
+			maxpart = tree[dp->mroot[i]].nPart;
+			maxgrid = i;
 		}
-		pthread_mutex_init(&mutex, NULL);
+	}
 
-		int teamid, core_id;
-		pthread_attr_t attr;
-		cpu_set_t cpuset;
+	DBG_INFO(DBG_TMP, "[%d] Mesh maxpart is %d in Grid %d.\n", dp->rank, maxpart, maxgrid);
 
-		pthread_attr_init(&attr);
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	int gridRange[2];
+	gridRange[0]=0;
+	gridRange[1]=ge-gs;
 
-		for (i=0; i<tnum; i++)
-		{
-			teamid = i%nTeam;
+	int *curIndex;
+	pthread_mutex_t mutex;
+	pthread_barrier_t *bar;
+	PPParameter *pppar;
 
-			pth[i].blockid = i/nTeam;
-			pth[i].teamid = teamid;
-			pth[i].nSlave = nSlave;
+	GridTask *gtask;
 
-			pth[i].counter = 0;
+	curIndex = (int*)xmalloc(sizeof(int)*nTeam, 8015);
+	bar = (pthread_barrier_t*)xmalloc(sizeof(pthread_barrier_t)*nTeam, 8016);
+	pppar = (PPParameter*)xmalloc(sizeof(PPParameter)*nTeam, 8017);
+	gtask = (GridTask*)xmalloc(sizeof(GridTask)*(ge-gs), 8018);
 
-			pth[i].pq_tw = &twqueues[teamid];
-			pth[i].dp = dp;
-			pth[i].constants = constants;
-			pth[i].pppar = &pppar[teamid];
+	for (i=gs; i<ge; i++)
+	{
+		gtask[i-gs].gridid = i;
+		gtask[i-gs].npart = tree[dp->mroot[i]].nPart;
+	}
+	qsort(gtask, ge-gs, sizeof(GridTask), CompnPart);
 
-			pth[i].mutex = &mutex;
-			pth[i].bar = &bar[teamid];
+	for (i=0; i<nTeam; i++)
+	{
+		curIndex[i]=gridRange[0];
+		pthread_barrier_init(&bar[i], NULL, nSlave);
+		pppar[i].finish=0;
+	}
 
-			pth[i].gridP = gridRange;
-			pth[i].curIndex = &curIndex[teamid];
+	pthread_mutex_init(&mutex, NULL);
+
+	int teamid, core_id;
+	pthread_attr_t attr;
+	cpu_set_t cpuset;
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+
+	for (i=0; i<tnum; i++)
+	{
+		teamid = i%nTeam;
+
+		pth[i].blockid = i/nTeam;
+		pth[i].teamid = teamid;
+		pth[i].nSlave = nSlave;
+
+		pth[i].counter = 0;
+
+		pth[i].pq_tw = &twqueues[teamid];
+		pth[i].dp = dp;
+		pth[i].constants = constants;
+		pth[i].pppar = &pppar[teamid];
+
+		pth[i].mutex = &mutex;
+		pth[i].bar = &bar[teamid];
+
+		pth[i].gridP = gridRange;
+		pth[i].curIndex = &curIndex[teamid];
+		pth[i].gtask = gtask;
+		pth[i].maxpart = maxpart;
 
 #ifdef __MIC__
-			CPU_ZERO(&cpuset);
-			core_id = pth[i].blockid+teamid*nSlave+(dp->rank%constants->NP_PER_NODE)/constants->NMIC_PER_NODE*tnum+1;
-			CPU_SET(core_id, &cpuset);
-			pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
+		CPU_ZERO(&cpuset);
+		core_id = pth[i].blockid+teamid*nSlave+(dp->rank%constants->NP_PER_NODE)/constants->NMIC_PER_NODE*tnum+1;
+		CPU_SET(core_id, &cpuset);
+		pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
 #endif
-			DBG_INFO(DBG_LOGIC, "[%d-%d] blockid=%d, teamid=%d, Ngrid=%d, core=%d.\n", dp->rank, i, pth[i].blockid, teamid, dp->nSide[0]*dp->nSide[1]*dp->nSide[2], core_id);
-			pthread_create(&thread[i], &attr, ((i<nTeam) ? teamMaster : compPP), (void*)&pth[i]);
-		}
-		pthread_attr_destroy(&attr);
+		DBG_INFO(DBG_LOGIC, "[%d-%d] blockid=%d, teamid=%d, Ngrid=%d, core=%d.\n", dp->rank, i, pth[i].blockid, teamid, dp->nSide[0]*dp->nSide[1]*dp->nSide[2], core_id);
+		pthread_create(&thread[i], &attr, ((i<nTeam) ? teamMaster : compPP), (void*)&pth[i]);
+	}
+	pthread_attr_destroy(&attr);
 
-		for (i=0; i<tnum; i++)
-		{
-			pthread_join(thread[i], NULL);
-		}
+	for (i=0; i<tnum; i++)
+	{
+		pthread_join(thread[i], NULL);
+	}
 
-		for (i=0; i<nTeam; i++)
-		{
-			*counter += pth[i].counter;
-		}	
+	for (i=0; i<nTeam; i++)
+	{
+		*counter += pth[i].counter;
+	}	
 
-		free(pth);
-		free(thread);
-		destroy_queues_tw(twqueues, nTeam);
-		free(twqueues);
-		free(curIndex);
-		free(bar);
-		free(pppar);
+	free(pth);
+	free(thread);
+	destroy_queues_tw(twqueues, nTeam);
+	free(twqueues);
+	free(curIndex);
+	free(bar);
+	free(pppar);
+	free(gtask);
 }
 
 
@@ -932,9 +965,9 @@ void tree_traversal(Domain *dp, Constants *constants)
 	counter += counter_mic;
 
 	DBG_INFO(DBG_TIME, "[%d] Treewalking: offload and transfer time = %f, ratio = %.5f, cnt = %ld.\n", dp->rank, dtime()-tstamp, constants->CPU_RATIO, counter);
-	if(constants->DYNAMIC_LOAD && (1.11*tstampc < tstampm || 0.9*tstampc > tstampm))
+	if(constants->DYNAMIC_LOAD && (1.2*tstampc < tstampm || 0.85*tstampc > tstampm))
 	{
-		double vratio = (((tstampm / tstampc) - 1)*0.9) * (tstampm > tstampc ? constants->CPU_RATIO : 1-constants->CPU_RATIO);
+		double vratio = (((tstampm / tstampc) - 1)*0.85) * (tstampm > tstampc ? constants->CPU_RATIO : 1-constants->CPU_RATIO);
 		int vgrid = (int)((double) (splitgrid - gstart) * vratio);
 		if (vgrid != 0)
 		{

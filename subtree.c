@@ -583,7 +583,7 @@ void* build_tree_morton(void *param)
 		}
 //		printf("[%d] mesh %d finished, level=%d.\n", tid, m, level);
 	}
-	DBG_INFO(DBG_TIME, "[%d-%d] bsort or qsort used %.4f seconds\n", rank, tid, ttree);
+//	DBG_INFO(DBG_TIME, "[%d-%d] bsort or qsort used %.4f seconds\n", rank, tid, ttree);
 }
 
 
