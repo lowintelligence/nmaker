@@ -95,19 +95,44 @@ int checkpart(int rank, Body *part, Int n, Real error)
 }
 
 __OffloadFunc_Macro__
-int getGridIndex(int *gridP, int *curIndex, Domain *dp, GridTask *gtask)
+int getGridIndex(int *gridP, int *curIndex, int *curChild, Domain *dp, GridTask *gtask)
 {
 	*curIndex = gridP[0];
-	gridP[0]++;
-	while(*curIndex<gridP[1] && (dp->tag[gtask[*curIndex].gridid]!=TAG_OUTERCORE && dp->tag[gtask[*curIndex].gridid]!=TAG_FRONTIERS))
+	if(*curIndex < gridP[1])
 	{
-		*curIndex = gridP[0];
-		gridP[0]++;
+		while(*curIndex<gridP[1] && (((*curChild = gtask[*curIndex].childid)==-1) || (dp->tag[gtask[*curIndex].gridid]!=TAG_OUTERCORE && dp->tag[gtask[*curIndex].gridid]!=TAG_FRONTIERS)))
+		{
+			gridP[0]++;
+			*curIndex = gridP[0];
+		}
+		if (*curIndex < gridP[1])
+		{
+			gtask[*curIndex].childid++;
+
+			if(gtask[*curIndex].childid >= gtask[*curIndex].nchild)
+			{
+				gtask[*curIndex].childid = -1;
+
+				while(gridP[0]<gridP[1] && ((gtask[gridP[0]].childid == -1) || (dp->tag[gtask[*curIndex].gridid]!=TAG_OUTERCORE && dp->tag[gtask[*curIndex].gridid]!=TAG_FRONTIERS)))
+				{
+					gridP[0]++;
+				}
+			}
+//			DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+//			else DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+			return 0;
+		}
+		else
+		{
+//			DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+			return 1;
+		}
 	}
-	if(*curIndex >= gridP[1])
-		return 1;
 	else
-		return 0;
+	{
+//		DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+		return 1;
+	}
 }
 
 __OffloadFunc_Macro__
@@ -144,7 +169,7 @@ void* teamMaster(void* param)
 	Constants *constants = pth->constants;
 	TWQ* pq_tw = pth->pq_tw;
 
-	int *curIndex = pth->curIndex;
+	int curIndex, curChild;
 	int *gridP = pth->gridP;
 	GridTask *gtask = pth->gtask;
 	pthread_mutex_t *mutex = pth->mutex;
@@ -182,7 +207,7 @@ void* teamMaster(void* param)
 		tstamp = dtime();
 
 		pthread_mutex_lock(mutex);
-		finish = getGridIndex(gridP, curIndex, dp, gtask);
+		finish = getGridIndex(gridP, &curIndex, &curChild, dp, gtask);
 		pthread_mutex_unlock(mutex);
 
 		tmutex += dtime() - tstamp;
@@ -193,7 +218,8 @@ void* teamMaster(void* param)
 			break;
 		}
 
-		cella = pth->gtask[*curIndex].gridid;
+		cella = pth->gtask[curIndex].gridid;
+
 		DBG_INFO(DBG_CALC, "[%d-%d] Calculate the grid %d/%d particles in %d/%d mesh.\n", dp->rank, pth->teamid, cella, tree[dp->mroot[cella]].nPart, pth->gridP[0], pth->gridP[1]);
 
 		tstamp = dtime();
@@ -210,6 +236,42 @@ void* teamMaster(void* param)
 		{
 			continue;
 		}
+
+		if (curChild>pth->gtask[curIndex].nchild)
+		{
+			DBG_INFO(DBG_TMP, "[%d-%d] Mesh %d/%d with %d/%d children, Child %d error.\n", dp->rank, pth->teamid, cella, curIndex, tree[dp->mroot[cella]].nChildren, pth->gtask[curIndex].nchild, curChild);
+			sleep(2);
+			system_exit(99998);
+		}
+
+		Int TA, TB;
+		if (pth->gtask[curIndex].nchild==1)
+		{
+			TA = dp->mroot[cella];
+		}
+		else
+		{
+			TB = dp->mroot[cella];
+
+			int parentidx, childidx;
+			childidx = curChild % 8;
+
+			if (pth->gtask[curIndex].nchild==64)
+			{
+				parentidx = curChild / 8;
+				if (parentidx < tree[TB].nChildren)
+				{
+					TB = tree[TB].firstChild+parentidx; 
+				}
+				else continue;
+			}
+			if(childidx < tree[TB].nChildren)
+			{
+				TA = tree[TB].firstChild+childidx;
+			}
+			else continue;
+		}
+
 		for (n=i1-1; n<i1+2; n++)
 		{
 			for (m=i2-1; m<i2+2; m++)
@@ -219,7 +281,7 @@ void* teamMaster(void* param)
 					int cellb = n*(Jn*Kn)+m*Kn+l;
 					if (dp->count[cella]>0 && dp->count[cellb]>0)
 					{
-						enqueue_tw(pq_tw, dp->mroot[cella], dp->mroot[cellb]);
+						enqueue_tw(pq_tw, TA, dp->mroot[cellb]);
 						cnt++;
 					}
 					else
@@ -246,7 +308,7 @@ void* teamMaster(void* param)
 	}
 
 	DBG_INFO(DBG_LOGIC, "[%d-%d] Local tree processing counted %d pairs.\n", dp->rank, pth->teamid, cnt);
-	DBG_INFO(DBG_CALC, "[%d-%d] mutex lock time = %f, queue & pp time = %f\n", dp->rank, pth->teamid, tmutex, tqueue);
+	DBG_INFO(DBG_TMP, "[%d-%d] mutex lock time = %f, queue & pp time = %f\n", dp->rank, pth->teamid, tmutex, tqueue);
 
 	free(pa.x);
 	free(pa.y);
@@ -318,28 +380,54 @@ int dtt_threaded(Domain *dp, Constants *constants, int gs, int ge, int nTeam, in
 	gridRange[0]=0;
 	gridRange[1]=ge-gs;
 
-	int *curIndex;
 	pthread_mutex_t mutex;
 	pthread_barrier_t *bar;
 	PPParameter *pppar;
 
 	GridTask *gtask;
 
-	curIndex = (int*)xmalloc(sizeof(int)*nTeam, 8015);
 	bar = (pthread_barrier_t*)xmalloc(sizeof(pthread_barrier_t)*nTeam, 8016);
 	pppar = (PPParameter*)xmalloc(sizeof(PPParameter)*nTeam, 8017);
 	gtask = (GridTask*)xmalloc(sizeof(GridTask)*(ge-gs), 8018);
 
+#ifdef __MIC__
+	int ppthreshold = constants->MIC_PP_THRESHOLD<<4;
+#else
+	int ppthreshold = constants->MAX_PACKAGE_SIZE<<8;
+#endif
 	for (i=gs; i<ge; i++)
 	{
 		gtask[i-gs].gridid = i;
 		gtask[i-gs].npart = tree[dp->mroot[i]].nPart;
+		gtask[i-gs].childid = 0;
+		if(gtask[i-gs].npart >= ppthreshold)
+		{
+			int j;
+			for(j=0; j<tree[dp->mroot[i]].nChildren; j++)
+			{
+				if (tree[tree[dp->mroot[i]].firstChild+j].nPart >= ppthreshold/2)
+				{
+					break;
+				}
+			}
+			if(j<tree[dp->mroot[i]].nChildren)
+			{
+				gtask[i-gs].nchild = 64;
+			}
+			else
+			{
+				gtask[i-gs].nchild = 8;
+			}
+		}
+		else
+		{
+				gtask[i-gs].nchild = 1;
+		}
 	}
 	qsort(gtask, ge-gs, sizeof(GridTask), CompnPart);
 
 	for (i=0; i<nTeam; i++)
 	{
-		curIndex[i]=gridRange[0];
 		pthread_barrier_init(&bar[i], NULL, nSlave);
 		pppar[i].finish=0;
 	}
@@ -372,7 +460,6 @@ int dtt_threaded(Domain *dp, Constants *constants, int gs, int ge, int nTeam, in
 		pth[i].bar = &bar[teamid];
 
 		pth[i].gridP = gridRange;
-		pth[i].curIndex = &curIndex[teamid];
 		pth[i].gtask = gtask;
 		pth[i].maxpart = maxpart;
 
@@ -401,7 +488,6 @@ int dtt_threaded(Domain *dp, Constants *constants, int gs, int ge, int nTeam, in
 	free(thread);
 	destroy_queues_tw(twqueues, nTeam);
 	free(twqueues);
-	free(curIndex);
 	free(bar);
 	free(pppar);
 	free(gtask);
@@ -494,6 +580,11 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 
 #ifdef __MIC__
 	Int ppsize = pth->constants->MIC_PP_THRESHOLD;
+//	if (tree[TA].nPart > (ppsize << 4))
+//	{
+//		ppsize = pth->constants->MAX_PACKAGE_SIZE<<1;
+//		DBG_INFO(DBG_TMP, "[%d-%d] ppsize threshold touched with %d particles in %d.\n", pth->dp->rank, pth->teamid, tree[TA].nPart, TA);
+//	}
 #endif
 
 	int nA, nB, calcm;

@@ -4,7 +4,7 @@ HUBBLE        0.7
 REDSHIFT      49.0
 OPENANGL      0.3
 BOXSIZE       100000.0
-SOFTING       10.0
+SOFTING       30.0
 MESHPOW       4
 PEANOBIT      4
 NUMPART       2097152
@@ -18,7 +18,7 @@ NTEAMMIC      60
 CPURATIO      0.16
 TREEMAX       6
 TREEMIN       1
-NCRITI        128
-PPSIZE        1024
-RNDPART       1
+NCRITI        64
+PPSIZE        512
+RNDPART       0
 ICPATH        ./data/ic_128

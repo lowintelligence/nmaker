@@ -19,7 +19,7 @@ CPURATIO      0.16
 DYNLOAD       1
 TREEMAX       7
 TREEMIN       1
-NCRITI        32
-PPSIZE        256
+NCRITI        128
+PPSIZE        1024
 RNDPART       0
 ICPATH        ./data/ic_256

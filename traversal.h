@@ -12,6 +12,8 @@ typedef struct _taskinfo
 {
 	int gridid;
 	int npart;
+	int nchild;
+	int childid;
 } GridTask;
 
 typedef struct _dttblock
@@ -31,7 +33,6 @@ typedef struct _dttblock
 	pthread_barrier_t *bar;
 
     int* gridP;
-	int* curIndex;
 	GridTask* gtask;
 	int maxpart; 
 } DttBlock;
