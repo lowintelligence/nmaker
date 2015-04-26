@@ -12,7 +12,7 @@ typedef struct _taskinfo
 {
 	int gridid;
 	int npart;
-	int nchild;
+	int level;
 	int childid;
 } GridTask;
 

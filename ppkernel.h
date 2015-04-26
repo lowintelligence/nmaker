@@ -34,7 +34,7 @@
 
 #ifdef NMK_SINGLE_PREC
     #define N_CACHE 1024
-    #define CLCNT 64
+    #define CLCNT 16
     #define UNROLL 4
 #else
     #define N_CACHE 512

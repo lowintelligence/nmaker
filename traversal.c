@@ -95,42 +95,147 @@ int checkpart(int rank, Body *part, Int n, Real error)
 }
 
 __OffloadFunc_Macro__
-int getGridIndex(int *gridP, int *curIndex, int *curChild, Domain *dp, GridTask *gtask)
+Int getChildNode(Int root, int cur, int level, Domain *dp)
 {
-	*curIndex = gridP[0];
-	if(*curIndex < gridP[1])
+	Int tnode = root;
+	int lid = 0, i;
+	for(i=1; i<=level; i++)
 	{
-		while(*curIndex<gridP[1] && (((*curChild = gtask[*curIndex].childid)==-1) || (dp->tag[gtask[*curIndex].gridid]!=TAG_OUTERCORE && dp->tag[gtask[*curIndex].gridid]!=TAG_FRONTIERS)))
+		lid = (cur % (1<<((level-i+1)*3))) >> ((level-i)*3);
+		if(lid < tree[tnode].nChildren)
+		{
+			tnode = tree[tnode].firstChild + lid;
+		}
+		else
+		{
+			DBG_INFO(DBG_TMP, "[%d] Error childid %d at level %d.\n", dp->rank, cur, i);
+		}
+	}
+	return tnode;
+}
+
+__OffloadFunc_Macro__
+int setNextChildDFS(Int root, int *cur, int *level, Domain *dp)
+{
+	int l = *level;
+	int cid = *cur;
+	int lid[32], nid[32];
+	
+	if (root<0 || l==0 || (cid+1 >= (1<<l))) return 0;
+
+	Int tnode;
+
+	int i=0;
+	lid[0] = 0;
+	for(i=1; i<=l; i++)
+	{
+		lid[i] = (cid % (1<<((l-i+1)*3))) >> ((l-i)*3);
+	}
+	nid[0] = -1;
+	tnode = root;
+	int mask = 0;
+	for(i=1; i<=l; i++)
+	{
+		if(lid[i] < tree[tnode].nChildren)
+		{
+			if(lid[i] < tree[tnode].nChildren - 1)
+			{
+				nid[i] = mask + lid[i] + 1;
+			}
+			else
+			{
+				nid[i] = -1;
+			}
+			tnode = tree[tnode].firstChild + lid[i];
+			mask = (mask+lid[i]) * 8;
+		}
+		else
+		{
+			DBG_INFO(DBG_TMP, "[%d] Error childid %d at level %d.\n", dp->rank, cid, i);
+		}
+	}
+
+	i = l;
+	while (i>0 && nid[i]==-1)
+	{
+		i--;
+	}
+	
+	if(i>0)
+	{
+		*cur = nid[i];
+		*level = i;
+		return 1;
+	}
+	else
+	{
+		*cur = -1;
+		*level = -1;
+		return 0;
+	}
+}
+
+__OffloadFunc_Macro__
+int getGridIndex(int *gridP, int *cell, Int *curChild, Domain *dp, GridTask *gtask)
+{
+#ifdef __MIC__
+	int ppthreshold = 3000;
+#else
+	int ppthreshold = 1500;
+#endif
+	int cella;
+	cella = gridP[0];
+	if(cella < gridP[1])
+	{
+		while(cella<gridP[1] && ((gtask[cella].childid==-1) || (dp->tag[gtask[cella].gridid]!=TAG_OUTERCORE && dp->tag[gtask[cella].gridid]!=TAG_FRONTIERS)))
 		{
 			gridP[0]++;
-			*curIndex = gridP[0];
+			cella = gridP[0];
 		}
-		if (*curIndex < gridP[1])
+		if (cella < gridP[1])
 		{
-			gtask[*curIndex].childid++;
+			int cid = gtask[cella].childid;
+			int l = gtask[cella].level;
+			*cell = gtask[cella].gridid;
+			Int tnode = getChildNode(dp->mroot[*cell], cid, l, dp);
 
-			if(gtask[*curIndex].childid >= gtask[*curIndex].nchild)
+			while(tree[tnode].nPart > ppthreshold && tree[tnode].nChildren>0)
 			{
-				gtask[*curIndex].childid = -1;
+				cid *= 8;
+				l++;
+				tnode = tree[tnode].firstChild;
+			}
 
-				while(gridP[0]<gridP[1] && ((gtask[gridP[0]].childid == -1) || (dp->tag[gtask[*curIndex].gridid]!=TAG_OUTERCORE && dp->tag[gtask[*curIndex].gridid]!=TAG_FRONTIERS)))
+			*curChild = tnode;
+
+			if(setNextChildDFS(dp->mroot[*cell], &cid, &l, dp))
+			{
+				gtask[cella].childid = cid;
+				gtask[cella].level = l;
+			}
+			else
+			{
+				gtask[cella].childid = -1;
+				gtask[cella].level = -1;
+
+				while(gridP[0]<gridP[1] && ((gtask[gridP[0]].childid == -1) || (dp->tag[gtask[gridP[0]].gridid]!=TAG_OUTERCORE && dp->tag[gtask[gridP[0]].gridid]!=TAG_FRONTIERS)))
 				{
 					gridP[0]++;
 				}
 			}
-//			DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
-//			else DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+
+//			DBG_INFO(DBG_TMP, "[%d] cell=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, cella, *curChild, gridP[0], gridP[1]);
 			return 0;
 		}
 		else
 		{
-//			DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+//			DBG_INFO(DBG_TMP, "[%d] cell=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, cella, *curChild, gridP[0], gridP[1]);
 			return 1;
 		}
 	}
 	else
 	{
-//		DBG_INFO(DBG_TMP, "[%d] curIndex=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, *curIndex, *curChild, gridP[0], gridP[1]);
+//		DBG_INFO(DBG_TMP, "[%d] cell=%d, curChild=%d, grid[0]=%d, grid1=%d.\n", dp->rank, cella, *curChild, gridP[0], gridP[1]);
 		return 1;
 	}
 }
@@ -169,7 +274,7 @@ void* teamMaster(void* param)
 	Constants *constants = pth->constants;
 	TWQ* pq_tw = pth->pq_tw;
 
-	int curIndex, curChild;
+	Int curChild;
 	int *gridP = pth->gridP;
 	GridTask *gtask = pth->gtask;
 	pthread_mutex_t *mutex = pth->mutex;
@@ -207,7 +312,7 @@ void* teamMaster(void* param)
 		tstamp = dtime();
 
 		pthread_mutex_lock(mutex);
-		finish = getGridIndex(gridP, &curIndex, &curChild, dp, gtask);
+		finish = getGridIndex(gridP, &cella, &curChild, dp, gtask);
 		pthread_mutex_unlock(mutex);
 
 		tmutex += dtime() - tstamp;
@@ -218,9 +323,7 @@ void* teamMaster(void* param)
 			break;
 		}
 
-		cella = pth->gtask[curIndex].gridid;
-
-		DBG_INFO(DBG_CALC, "[%d-%d] Calculate the grid %d/%d particles in %d/%d mesh.\n", dp->rank, pth->teamid, cella, tree[dp->mroot[cella]].nPart, pth->gridP[0], pth->gridP[1]);
+		DBG_INFO(DBG_CALC, "[%d-%d] Calculate the grid %d/%d/%d particles in %d/%d mesh.\n", dp->rank, pth->teamid, cella, curChild, tree[curChild].nPart, pth->gridP[0], pth->gridP[1]);
 
 		tstamp = dtime();
 
@@ -237,40 +340,12 @@ void* teamMaster(void* param)
 			continue;
 		}
 
-		if (curChild>pth->gtask[curIndex].nchild)
-		{
-			DBG_INFO(DBG_TMP, "[%d-%d] Mesh %d/%d with %d/%d children, Child %d error.\n", dp->rank, pth->teamid, cella, curIndex, tree[dp->mroot[cella]].nChildren, pth->gtask[curIndex].nchild, curChild);
-			sleep(2);
-			system_exit(99998);
-		}
-
-		Int TA, TB;
-		if (pth->gtask[curIndex].nchild==1)
-		{
-			TA = dp->mroot[cella];
-		}
-		else
-		{
-			TB = dp->mroot[cella];
-
-			int parentidx, childidx;
-			childidx = curChild % 8;
-
-			if (pth->gtask[curIndex].nchild==64)
-			{
-				parentidx = curChild / 8;
-				if (parentidx < tree[TB].nChildren)
-				{
-					TB = tree[TB].firstChild+parentidx; 
-				}
-				else continue;
-			}
-			if(childidx < tree[TB].nChildren)
-			{
-				TA = tree[TB].firstChild+childidx;
-			}
-			else continue;
-		}
+//		if (curChild>pth->gtask[curIndex].nchild)
+//		{
+//			DBG_INFO(DBG_TMP, "[%d-%d] Mesh %d/%d with %d/%d children, Child %d error.\n", dp->rank, pth->teamid, cella, curIndex, tree[dp->mroot[cella]].nChildren, pth->gtask[curIndex].nchild, curChild);
+//			sleep(2);
+//			system_exit(99998);
+//		}
 
 		for (n=i1-1; n<i1+2; n++)
 		{
@@ -279,9 +354,9 @@ void* teamMaster(void* param)
 				for (l=i3-1; l<i3+2; l++)
 				{
 					int cellb = n*(Jn*Kn)+m*Kn+l;
-					if (dp->count[cella]>0 && dp->count[cellb]>0)
+					if (tree[curChild].nPart>0 && dp->count[cellb]>0)
 					{
-						enqueue_tw(pq_tw, TA, dp->mroot[cellb]);
+						enqueue_tw(pq_tw, curChild, dp->mroot[cellb]);
 						cnt++;
 					}
 					else
@@ -390,39 +465,12 @@ int dtt_threaded(Domain *dp, Constants *constants, int gs, int ge, int nTeam, in
 	pppar = (PPParameter*)xmalloc(sizeof(PPParameter)*nTeam, 8017);
 	gtask = (GridTask*)xmalloc(sizeof(GridTask)*(ge-gs), 8018);
 
-#ifdef __MIC__
-	int ppthreshold = constants->MIC_PP_THRESHOLD<<4;
-#else
-	int ppthreshold = constants->MAX_PACKAGE_SIZE<<8;
-#endif
 	for (i=gs; i<ge; i++)
 	{
 		gtask[i-gs].gridid = i;
 		gtask[i-gs].npart = tree[dp->mroot[i]].nPart;
+		gtask[i-gs].level = 0;
 		gtask[i-gs].childid = 0;
-		if(gtask[i-gs].npart >= ppthreshold)
-		{
-			int j;
-			for(j=0; j<tree[dp->mroot[i]].nChildren; j++)
-			{
-				if (tree[tree[dp->mroot[i]].firstChild+j].nPart >= ppthreshold/2)
-				{
-					break;
-				}
-			}
-			if(j<tree[dp->mroot[i]].nChildren)
-			{
-				gtask[i-gs].nchild = 64;
-			}
-			else
-			{
-				gtask[i-gs].nchild = 8;
-			}
-		}
-		else
-		{
-				gtask[i-gs].nchild = 1;
-		}
 	}
 	qsort(gtask, ge-gs, sizeof(GridTask), CompnPart);
 
@@ -936,13 +984,13 @@ int dtt_process_cell(Int TA, Int TB, TWQ *pq_tw, void *param)
 				pth->counter += nA*(nB*23+1);
 				ppmkernel(pa, nA, pb, mass, nB, pth->constants, pc, pth->nSlave, pth->blockid);
 				pthread_barrier_wait(pth->bar);
-				checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 5);
-//				if(checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 5))
-//				{
-//					printarray(pth->dp->rank, pth->teamid, tree[TA].firstPart, pa, nA, NULL);
-//					sleep(2);
-//					system_exit(99999);
-//				}
+//				checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 5);
+				if(checknan(pth->dp->rank, tree[TA].firstPart, pc, nA, 5))
+				{
+					printarray(pth->dp->rank, pth->teamid, tree[TA].firstPart, pa, nA, NULL);
+					sleep(2);
+					system_exit(99999);
+				}
 				pusharray3(&part[tree[TA].firstPart], nA, pc);
 			}
 		}
@@ -1002,18 +1050,31 @@ void tree_traversal(Domain *dp, Constants *constants)
 	int *pidx = dp->pidx;
 	int *tag = dp->tag;
 
-	Int splitnum = (Int)((double)npart*constants->CPU_RATIO);
+	Int nlognpart = 0;
+	for (n=gstart; n<gend; n++)
+	{
+		if((dp->tag[n] == TAG_OUTERCORE || dp->tag[n] == TAG_FRONTIERS) && (dp->count[n]>0))
+		{
+			nlognpart += dp->count[n]*(logf(dp->count[n])/2.302585+1);
+		}
+	}
 
-	Int splitpart;
+	Int splitnum = (Int)((double)nlognpart*constants->CPU_RATIO);
+
 	int splitgrid;
 
 	long counter_mic = 0;
-
+	Int splitcount = 0;
+	Int splitpart;
 	for (n=gstart; n<gend; n++)
 	{
-		if((dp->tag[n] == TAG_OUTERCORE || dp->tag[n] == TAG_FRONTIERS) && (dp->pidx[n] >= splitnum))
+		if((dp->tag[n] == TAG_OUTERCORE || dp->tag[n] == TAG_FRONTIERS) && (dp->count[n]>0))
 		{
-			break;
+			splitcount += dp->count[n]*(logf(dp->count[n])/2.302585+1);
+			if(splitcount >= splitnum)
+			{
+				break;
+			}
 		}
 	}
 	splitgrid = n;
@@ -1058,11 +1119,26 @@ void tree_traversal(Domain *dp, Constants *constants)
 	DBG_INFO(DBG_TIME, "[%d] Treewalking: offload and transfer time = %f, ratio = %.5f, cnt = %ld.\n", dp->rank, dtime()-tstamp, constants->CPU_RATIO, counter);
 	if(constants->DYNAMIC_LOAD && (1.2*tstampc < tstampm || 0.85*tstampc > tstampm))
 	{
-		double vratio = (((tstampm / tstampc) - 1)*0.85) * (tstampm > tstampc ? constants->CPU_RATIO : 1-constants->CPU_RATIO);
-		int vgrid = (int)((double) (splitgrid - gstart) * vratio);
-		if (vgrid != 0)
+		double vratio;
+		double oratio = constants->CPU_RATIO;
+		vratio = oratio + 0.85*(oratio)*(1.0-oratio)*(tstampm-tstampc)/(tstampc*(1-oratio)+tstampm*oratio);
+
+		splitnum = (Int)((double)nlognpart*vratio);
+		splitcount = 0;
+		for (n=gstart; n<gend; n++)
 		{
-			constants->CPU_RATIO += constants->CPU_RATIO*vratio;
+			if((dp->tag[n] == TAG_OUTERCORE || dp->tag[n] == TAG_FRONTIERS) && (dp->count[n]>0))
+			{
+				splitcount += dp->count[n]*(logf(dp->count[n])/2.302585+1);
+				if(splitcount >= splitnum)
+				{
+					break;
+				}
+			}
+		}
+		if (splitgrid != n)
+		{
+			constants->CPU_RATIO = vratio;
 		}
 	}
 #else // __INTEL_OFFLOAD No offload

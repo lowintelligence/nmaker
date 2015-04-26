@@ -1,5 +1,5 @@
 ---------------------------------
-Updated on March 28, 2015.
+Updated on April 26, 2015.
 ---------------------------------
 I. Offload:
 	[Done] 1. Host load balancing. ***
@@ -19,7 +19,7 @@ III. Runtime:
 	[Ignore] 1. Thread task model optimization, TEAM+MASTER+SLAVE is OK? **
 	2. Thread running model optimization, using thread pool?
 	[Almost done] 3. PM calcultion overlapped in Tree+PP.
-	4. A new load balance framework to deal with the clustered particles is needed. ***
+	[Half Done] 4. A new load balance framework to deal with the clustered particles is needed. ***
 
 IV. Correctness:
 	[Done] 1. PM calculation failed when bigger than 16 procs. **

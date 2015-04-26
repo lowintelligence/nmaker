@@ -1,4 +1,12 @@
 ***********************************************
+Changes from last update to April 26, 2015:
+-----------------------------------------------
+	1. Enqueue strategy twice modified, to resolve the imbalance while z < 1.
+	2. A more mature load balance implementation with NlogN estimation and strict caculation.
+	3. PPkernel argument adjust for better performance in current case.
+***********************************************
+
+***********************************************
 Changes from last update to March 26, 2015:
 -----------------------------------------------
 	1. Rewrite the ppkernel.c with macro definition.

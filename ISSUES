@@ -1,9 +1,24 @@
 ********************** Unsolved issues **********************
 1. When tree node reaches the MAX_TREE_LEVEL but the particles exceeding MAX_PACKAGE_SIZE, may be not stable.
 2. While PM thread runs asyncronizing with Tree threads, sometimes there would occur memory collision, don't know why.
-3. After long time simulation, while z is rather small, the particle was clustered, and the computation is not balanced.
+3. After long time simulation, while z is rather small, the particle was clustered, and the computation is not balanced. Work has been down for inner process calculating.
 
 ******************** Code fixing history ********************
+------------------2015/04/17 14:00--------------------
+traversal.h
+traversal.c
+	A full-level expansion scheme for enqueuing during tree traversal.
+	A mature load balance scheme in local calculation.
+
+ppkernel.h
+nbody.256
+	Parameter adjusting for better performance in current cases.
+
+------------------2015/04/09 17:00--------------------
+traversal.h
+traversal.c
+	A two-level expansion for enqueuing during tree traversal.
+
 ------------------2015/03/30 10:00--------------------
 traversal.h
 traversal.c
